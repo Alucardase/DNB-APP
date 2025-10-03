@@ -17,14 +17,18 @@
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:50;}
     .modal.open{display:flex;}
 
-    /* 🔧 Smaller YouTube Player */
+    /* 🔧 Floating YouTube Player (middle-left) */
     #player {
-      width: 320px;
-      height: 180px;
-      margin-top: 1rem;
+      position: fixed;
+      top: 50%;
+      left: 20px;
+      transform: translateY(-50%);
+      width: 240px;   /* smaller width */
+      height: 135px;  /* 16:9 ratio */
       border-radius: 0.75rem;
       overflow: hidden;
       background: #000;
+      z-index: 100; /* stays above content */
     }
     #player iframe {
       width: 100%;
@@ -49,7 +53,7 @@
     <button id="btnRepeat" class="btn-control">🔁</button>
   </div>
 
-  <!-- Smaller Video -->
+  <!-- Floating Video Player -->
   <div id="player"></div>
 
   <script>
