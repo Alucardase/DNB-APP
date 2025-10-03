@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Drum & Bass — Web Player</title>
+  <meta name="description" content="A lightweight Drum & Bass web app you can host on GitHub Pages." />
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    /* Hide default audio controls (we build custom UI) */
+    audio::-webkit-media-controls { display:none !important; }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #2e2e2e; border-radius: 8px; }
+    ::-webkit-scrollbar-track { background: #111; }
+  </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto p-4 md:p-8">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-black tracking-tight">My Drum & Bass</h1>
+        <p class="text-neutral-400">Self‑hosted player — built for GitHub Pages.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="importJsonBtn" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Import JSON</button>
+        <button id="exportJsonBtn" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Export JSON</button>
+        <a id="repoLink" href="#" target="_blank" class="hidden md:inline px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800">View on GitHub</a>
+      </div>
+    </header>
+
+    <!-- Search & Filters -->
+    <section class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <label class="col-span-2">
+        <span class="sr-only">Search</span>
+        <input id="searchInput" placeholder="Search title, artist, tags…" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none focus:border-neutral-600" />
+      </label>
+      <div class="flex gap-2">
+        <select id="bpmMin" class="flex-1 px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">
+          <option value="">BPM ≥</option>
+          <option>160</option>
+          <option>170</option>
+          <option>172</option>
+          <option>174</option>
+          <option>176</option>
+        </select>
+        <select id="bpmMax" class="flex-1 px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">
+          <option value="">BPM ≤</option>
+          <option>170</option>
+          <option>172</option>
+          <option>174</option>
+          <option>176</option>
+          <option>180</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Player Card -->
+    <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 p-4 rounded-3xl bg-gradient-to-b from-neutral-900 to-neutral-950 border border-neutral-800 shadow-xl">
+        <div class="flex items-center gap-4">
+          <img id="coverArt" alt="Cover" class="w-24 h-24 rounded-2xl object-cover bg-neutral-800" />
+          <div class="min-w-0">
+            <div id="nowTitle" class="text-xl font-bold truncate">—</div>
+            <div id="nowArtist" class="text-neutral-400 truncate">—</div>
+            <div id="nowMeta" class="text-neutral-500 text-sm">BPM — • Tags —</div>
+          </div>
+        </div>
+
+        <!-- Visualizer Canvas -->
+        <canvas id="viz" class="mt-4 w-full rounded-2xl bg-neutral-950 border border-neutral-800" height="120"></canvas>
+
+        <!-- Timeline -->
+        <div class="mt-4">
+          <input id="seek" type="range" min="0" max="1000" value="0" class="w-full" />
+          <div class="flex justify-between text-xs text-neutral-400 mt-1">
+            <span id="curTime">0:00</span>
+            <span id="durTime">0:00</span>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-4 flex items-center gap-2">
+          <button id="btnPrev" title="Prev [←]" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏮️</button>
+          <button id="btnPlay" title="Play/Pause [Space]" class="px-6 py-3 rounded-2xl bg-neutral-100 text-neutral-900 font-semibold">▶</button>
+          <button id="btnNext" title="Next [→]" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏭️</button>
+          <button id="btnShuffle" title="Shuffle [S]" class="ml-2 px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">🔀</button>
+          <button id="btnLoop" title="Loop [L]" class="px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">🔁</button>
+          <button id="btnLike" title="Favourite [F]" class="ml-auto px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">♡</button>
+          <input id="vol" type="range" min="0" max="1" step="0.01" value="1" class="w-32" title="Volume" />
+        </div>
+
+        <audio id="audio" crossorigin="anonymous"></audio>
+      </div>
+
+      <!-- Playlist -->
+      <aside class="lg:col-span-1 p-4 rounded-3xl bg-neutral-950 border border-neutral-800">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-bold">Playlist</h2>
+          <div class="text-xs text-neutral-400">Drag to reorder</div>
+        </div>
+        <ul id="list" class="space-y-1 max-h-[520px] overflow-auto pr-1"></ul>
+      </aside>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-8 text-xs text-neutral-500">
+      <p><strong>How to deploy on GitHub Pages:</strong> 1) Create a new repo, 2) add this <code>index.html</code>, 3) commit & push, 4) Settings → Pages → set Branch to <em>main /root</em>. Replace sample track URLs with your own MP3/OGG links or files in the repo. Favourites & order save to your browser (localStorage).</p>
+    </footer>
+  </div>
+
+  <input id="fileInput" type="file" accept="application/json" class="hidden" />
+
+  <script>
+    // ======= Sample Library (replace with your own) =======
+    // You can also click Export JSON, edit offline, then Import JSON.
+    const DEFAULT_TRACKS = [
+      {
+        id: crypto.randomUUID(),
+        title: "Sample — Liquid Roller",
+        artist: "DJ Placeholder",
+        url: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_5d5b3cb9a2.mp3?filename=glorious-ambient-110355.mp3",
+        cover: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200",
+        bpm: 174,
+        tags: ["liquid", "roller"],
+        length: 0
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Sample — Neurofunk Ripper",
+        artist: "Producer X",
+        url: "https://cdn.pixabay.com/download/audio/2021/09/25/audio_1a0c5a2fba.mp3?filename=electronic-future-beats-117997.mp3",
+        cover: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200",
+        bpm: 172,
+        tags: ["neuro", "dark"],
+        length: 0
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Sample — Jungle Vibes",
+        artist: "Amen Bro",
+        url: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_762f80d803.mp3?filename=hip-hop-110331.mp3",
+        cover: "https://images.unsplash.com/photo-1518709281655-49d4f2e83f3a?w=1200",
+        bpm: 165,
+        tags: ["jungle", "breaks"],
+        length: 0
+      }
+    ];
+
+    // ======= State =======
+    const state = {
+      tracks: JSON.parse(localStorage.getItem('dnb.tracks') || 'null') || DEFAULT_TRACKS,
+      order: JSON.parse(localStorage.getItem('dnb.order') || 'null'),
+      likes: new Set(JSON.parse(localStorage.getItem('dnb.likes') || '[]')),
+      idx: 0,
+      shuffle: JSON.parse(localStorage.getItem('dnb.shuffle') || 'false'),
+      loop: JSON.parse(localStorage.getItem('dnb.loop') || 'false'),
+      filter: { q: '', bpmMin: '', bpmMax: '' }
+    };
+
+    // Maintain order list of track ids
+    if (!state.order) state.order = state.tracks.map(t => t.id);
+
+    // DOM refs
+    const el = (id) => document.getElementById(id);
+    const listEl = el('list');
+    const audio = el('audio');
+    const cover = el('coverArt');
+    const nowTitle = el('nowTitle');
+    const nowArtist = el('nowArtist');
+    const nowMeta = el('nowMeta');
+    const seek = el('seek');
+    const curTime = el('curTime');
+    const durTime = el('durTime');
+    const btnPlay = el('btnPlay');
+    const btnPrev = el('btnPrev');
+    const btnNext = el('btnNext');
+    const btnShuffle = el('btnShuffle');
+    const btnLoop = el('btnLoop');
+    const btnLike = el('btnLike');
+    const vol = el('vol');
+    const searchInput = el('searchInput');
+    const bpmMin = el('bpmMin');
+    const bpmMax = el('bpmMax');
+    const importBtn = el('importJsonBtn');
+    const exportBtn = el('exportJsonBtn');
+    const fileInput = el('fileInput');
+    const vizCanvas = el('viz');
+    const repoLink = el('repoLink');
+
+    // GitHub link (tries to infer if hosted on Pages)
+    try {
+      const loc = window.location;
+      if (loc.hostname.endsWith('github.io')) {
+        repoLink.href = `https://github.com/${loc.hostname.split('.')[0]}/${loc.pathname.split('/')[1]}`;
+        repoLink.classList.remove('hidden');
+      }
+    } catch {}
+
+    // ======= Utilities =======
+    const fmt = (s) => {
+      const m = Math.floor(s / 60) || 0;
+      const z = (n) => String(n).padStart(2, '0');
+      return `${m}:${z(Math.floor(s % 60) || 0)}`;
+    };
+
+    const save = () => {
+      localStorage.setItem('dnb.tracks', JSON.stringify(state.tracks));
+      localStorage.setItem('dnb.order', JSON.stringify(state.order));
+      localStorage.setItem('dnb.likes', JSON.stringify([...state.likes]));
+      localStorage.setItem('dnb.shuffle', JSON.stringify(state.shuffle));
+      localStorage.setItem('dnb.loop', JSON.stringify(state.loop));
+    };
+
+    const currentId = () => state.order[state.idx];
+    const currentTrack = () => state.tracks.find(t => t.id === currentId());
+
+    // ======= Render Playlist =======
+    function renderList() {
+      listEl.innerHTML = '';
+      // Build filtered list
+      const fil = filteredIds();
+      fil.forEach((id, i) => {
+        const t = state.tracks.find(x => x.id === id);
+        const li = document.createElement('li');
+        li.className = `group rounded-2xl border ${id === currentId() ? 'border-neutral-600 bg-neutral-900' : 'border-neutral-800 bg-neutral-950'} hover:border-neutral-600`;
+        li.draggable = true;
+        li.dataset.id = id;
+        li.innerHTML = `
+          <div class="p-3 flex items-center gap-3">
+            <img src="${t.cover}" alt="" class="w-12 h-12 rounded-xl object-cover bg-neutral-800" />
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-semibold truncate">${t.title}</div>
+              <div class="text-xs text-neutral-400 truncate">${t.artist} • ${t.bpm || '—'} BPM • ${(t.tags||[]).join(', ')}</div>
+            </div>
+            <button class="like px-2 py-1 rounded-xl bg-neutral-900 border border-neutral-800 text-sm">${state.likes.has(id) ? '♥' : '♡'}</button>
+            <button class="play px-3 py-2 rounded-xl bg-neutral-100 text-neutral-900 text-sm font-semibold">Play</button>
+          </div>`;
+        listEl.appendChild(li);
+      });
+    }
+
+    function filteredIds() {
+      const q = state.filter.q.toLowerCase();
+      const min = Number(state.filter.bpmMin) || -Infinity;
+      const max = Number(state.filter.bpmMax) || Infinity;
+      return state.order.filter(id => {
+        const t = state.tracks.find(x => x.id === id);
+        const text = `${t.title} ${t.artist} ${(t.tags||[]).join(' ')}`.toLowerCase();
+        const bpmOk = (!t.bpm && min === -Infinity && max === Infinity) || (t.bpm >= min && t.bpm <= max);
+        return text.includes(q) && bpmOk;
+      });
+    }
+
+    // ======= Load & Update Now Playing =======
+    async function load(idx) {
+      state.idx = idx;
+      const t = currentTrack();
+      nowTitle.textContent = t.title;
+      nowArtist.textContent = t.artist;
+      nowMeta.textContent = `BPM ${t.bpm || '—'} • ${(t.tags||[]).join(', ') || 'no tags'}`;
+      cover.src = t.cover;
+      audio.src = t.url;
+      btnLike.textContent = state.likes.has(t.id) ? '♥' : '♡';
+      try { await audio.play(); btnPlay.textContent = '⏸'; } catch { btnPlay.textContent = '▶'; }
+      save();
+      renderList();
+    }
+
+    // ======= Controls =======
+    btnPlay.addEventListener('click', () => {
+      if (audio.paused) { audio.play(); btnPlay.textContent = '⏸'; } else { audio.pause(); btnPlay.textContent = '▶'; }
+    });
+    btnPrev.addEventListener('click', () => prev());
+    btnNext.addEventListener('click', () => next());
+    btnShuffle.addEventListener('click', () => { state.shuffle = !state.shuffle; btnShuffle.classList.toggle('ring-2', state.shuffle); save(); });
+    btnLoop.addEventListener('click', () => { state.loop = !state.loop; audio.loop = state.loop; btnLoop.classList.toggle('ring-2', state.loop); save(); });
+    btnLike.addEventListener('click', () => { const id = currentId(); state.likes.has(id) ? state.likes.delete(id) : state.likes.add(id); btnLike.textContent = state.likes.has(id) ? '♥' : '♡'; save(); renderList(); });
+    vol.addEventListener('input', () => { audio.volume = Number(vol.value); });
+
+    function next() {
+      if (state.shuffle) {
+        const ids = filteredIds();
+        const nextId = ids[Math.floor(Math.random()*ids.length)] || currentId();
+        const i = state.order.indexOf(nextId);
+        load(i);
+      } else {
+        load((state.idx + 1) % state.order.length);
+      }
+    }
+    function prev() { load((state.idx - 1 + state.order.length) % state.order.length); }
+
+    audio.addEventListener('ended', () => { state.loop ? load(state.idx) : next(); });
+
+    // Seek bar
+    audio.addEventListener('timeupdate', () => {
+      const v = audio.duration ? (audio.currentTime / audio.duration) * 1000 : 0;
+      seek.value = Math.floor(v);
+      curTime.textContent = fmt(audio.currentTime || 0);
+      durTime.textContent = isFinite(audio.duration) ? fmt(audio.duration) : '0:00';
+    });
+    seek.addEventListener('input', () => {
+      if (audio.duration) {
+        audio.currentTime = (seek.value / 1000) * audio.duration;
+      }
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.code === 'Space') { e.preventDefault(); btnPlay.click(); }
+      if (e.key === 'ArrowRight') { btnNext.click(); }
+      if (e.key === 'ArrowLeft') { btnPrev.click(); }
+      if (e.key.toLowerCase() === 's') { btnShuffle.click(); }
+      if (e.key.toLowerCase() === 'l') { btnLoop.click(); }
+      if (e.key.toLowerCase() === 'f') { btnLike.click(); }
+    });
+
+    // Search & BPM filters
+    searchInput.addEventListener('input', () => { state.filter.q = searchInput.value; renderList(); });
+    bpmMin.addEventListener('change', () => { state.filter.bpmMin = bpmMin.value; renderList(); });
+    bpmMax.addEventListener('change', () => { state.filter.bpmMax = bpmMax.value; renderList(); });
+
+    // Playlist interactions (play & like buttons)
+    listEl.addEventListener('click', (e) => {
+      const li = e.target.closest('li');
+      if (!li) return;
+      const id = li.dataset.id;
+      if (e.target.classList.contains('play')) {
+        const i = state.order.indexOf(id);
+        load(i);
+      }
+      if (e.target.classList.contains('like')) {
+        state.likes.has(id) ? state.likes.delete(id) : state.likes.add(id);
+        save();
+        renderList();
+      }
+    });
+
+    // Drag & Drop reordering
+    let dragId = null;
+    listEl.addEventListener('dragstart', (e) => { const li = e.target.closest('li'); if (!li) return; dragId = li.dataset.id; e.dataTransfer.effectAllowed = 'move'; });
+    listEl.addEventListener('dragover', (e) => { e.preventDefault(); });
+    listEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const targetLi = e.target.closest('li'); if (!targetLi) return;
+      const targetId = targetLi.dataset.id;
+      const from = state.order.indexOf(dragId);
+      const to = state.order.indexOf(targetId);
+      state.order.splice(to, 0, ...state.order.splice(from,1));
+      save();
+      renderList();
+    });
+
+    // Import/Export JSON
+    exportBtn.addEventListener('click', () => {
+      const data = {
+        tracks: state.tracks,
+        order: state.order,
+        likes: [...state.likes]
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'dnb-library.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!Array.isArray(data.tracks) && !Array.isArray(data)) throw new Error('Invalid file.');
+          // Accept either {tracks:[...]} or a plain array
+          const tracks = Array.isArray(data) ? data : data.tracks;
+          // Normalize IDs
+          tracks.forEach(t => { if (!t.id) t.id = crypto.randomUUID(); });
+          state.tracks = tracks;
+          state.order = (Array.isArray(data.order) ? data.order : tracks.map(t=>t.id));
+          state.likes = new Set(Array.isArray(data.likes) ? data.likes : []);
+          save();
+          renderList();
+          load(0);
+        } catch (err) { alert('Could not import JSON: ' + err.message); }
+      };
+      reader.readAsText(file);
+    });
+
+    // ======= Web Audio Visualizer =======
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const actx = new AudioCtx();
+    const analyser = actx.createAnalyser();
+    analyser.fftSize = 2048;
+    const src = actx.createMediaElementSource(audio);
+    src.connect(analyser);
+    analyser.connect(actx.destination);
+
+    const ctx = vizCanvas.getContext('2d');
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function draw() {
+      requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(data);
+      const w = vizCanvas.width = vizCanvas.clientWidth * window.devicePixelRatio;
+      const h = vizCanvas.height = vizCanvas.clientHeight * window.devicePixelRatio;
+      ctx.clearRect(0,0,w,h);
+      const barW = w / data.length * 2.0;
+      for (let i=0; i<data.length; i++) {
+        const v = data[i] / 255.0; // 0..1
+        const bh = v * h;
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#a3a3a3';
+        ctx.fillRect(i*barW, h-bh, barW*0.9, bh);
+      }
+    }
+    draw();
+
+    // Unlock audio on first gesture (iOS)
+    const unlock = () => { actx.resume(); window.removeEventListener('touchstart', unlock); window.removeEventListener('click', unlock); };
+    window.addEventListener('touchstart', unlock, { once:true });
+    window.addEventListener('click', unlock, { once:true });
+
+    // ======= Init =======
+    renderList();
+    load(0);
+  </script>
+</body>
+</html>
