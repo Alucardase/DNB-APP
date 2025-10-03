@@ -6,11 +6,11 @@
   <title>Velkzie Drum & Bass — Web Player</title>
   <meta name="description" content="Music Player app" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
-    body, html { margin: 0; padding: 0; overflow: hidden; }
-    canvas#bgViz { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
-
+    body, html { margin: 0; padding: 0; }
+    
     /* Gradient animated button */
     .btn-control {
       background: linear-gradient(270deg, #7e22ce, #9333ea, #a855f7);
@@ -37,8 +37,6 @@
     #lyricsPanel { position: fixed; top: 0; right: -400px; width: 350px; height: 100%; background: rgba(20,20,30,0.95); border-left: 2px solid #4b0082; overflow-y: auto; padding: 1rem; transition: right 0.4s ease; z-index: 20; }
     #lyricsPanel.open { right: 0; }
     .lyric-line { margin-bottom: .5rem; padding: .5rem; border-radius: .5rem; background: rgba(255,255,255,0.05); }
-    .lyric-active { background: rgba(128,0,128,0.3); box-shadow: 0 0 10px rgba(128,0,128,0.6); animation: glow 2s ease-in-out infinite alternate; }
-    @keyframes glow { from { box-shadow: 0 0 5px rgba(128,0,128,0.4); } to { box-shadow: 0 0 15px rgba(128,0,128,0.8); } }
 
     /* Queue sidebar */
     #queuePanel { position: fixed; top: 0; left: -400px; width: 350px; height: 100%; background: rgba(20,20,20,0.95); border-right: 2px solid #333; overflow-y: auto; padding: 1rem; transition: left 0.4s ease; z-index: 20; }
@@ -46,12 +44,11 @@
   </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 min-h-screen relative">
-  <canvas id="bgViz"></canvas>
   <div class="relative z-10 max-w-6xl mx-auto p-4 md:p-8">
     <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Music Player</h1>
-        <p class="text-neutral-400">YouTube • Queue • Lyrics • Visualizer</p>
+        <p class="text-neutral-400">YouTube • Queue • Lyrics</p>
       </div>
       <div class="flex gap-2">
         <button id="btnQueue" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📖 Queue</button>
@@ -89,8 +86,7 @@
         <button id="resetSpeed" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 mt-1">Reset Speed</button>
       </div>
 
-      <!-- Real Audio Element -->
-      <audio id="audio" crossorigin="anonymous"></audio>
+      <div id="player"></div>
     </section>
   </div>
 
@@ -103,44 +99,6 @@
     let repeat = JSON.parse(localStorage.getItem('velkzieRepeat') || 'false');
     let current = 0;
 
-    const audio = document.getElementById("audio");
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048;
-    const source = ctx.createMediaElementSource(audio);
-    source.connect(analyser);
-    analyser.connect(ctx.destination);
-    let dataArray = new Uint8Array(analyser.fftSize);
-
-    const canvas=document.getElementById('bgViz');
-    const cctx=canvas.getContext('2d');
-    function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
-    window.addEventListener('resize',resize); resize();
-
-    function draw(){
-      requestAnimationFrame(draw);
-      analyser.getByteTimeDomainData(dataArray);
-
-      cctx.fillStyle='rgba(0,0,0,0.15)';
-      cctx.fillRect(0,0,canvas.width,canvas.height);
-
-      cctx.beginPath();
-      let sliceWidth=canvas.width/dataArray.length, x=0;
-      for(let i=0;i<dataArray.length;i++){
-        let v=dataArray[i]/128.0, y=v*canvas.height/2;
-        i===0?cctx.moveTo(x,y):cctx.lineTo(x,y);
-        x+=sliceWidth;
-      }
-      cctx.lineTo(canvas.width,canvas.height/2);
-
-      // Neon glow
-      cctx.shadowBlur=20; cctx.shadowColor='#a855f7';
-      cctx.strokeStyle='#c084fc'; cctx.lineWidth=3; cctx.stroke();
-      cctx.shadowBlur=0; cctx.strokeStyle='#fff'; cctx.lineWidth=1; cctx.stroke();
-    }
-    draw();
-
-    // Controls
     const btnPlay = document.getElementById('btnPlay');
     const btnPrev = document.getElementById('btnPrev');
     const btnNext = document.getElementById('btnNext');
@@ -161,6 +119,16 @@
       localStorage.setItem('velkziePlaylist', JSON.stringify(playlist));
       localStorage.setItem('velkzieShuffle', JSON.stringify(shuffle));
       localStorage.setItem('velkzieRepeat', JSON.stringify(repeat));
+    }
+
+    // ======= YouTube Integration =======
+    let ytPlayer;
+    function onYouTubeIframeAPIReady() {
+      ytPlayer = new YT.Player('player', {
+        height: '200', width: '320', videoId: '',
+        playerVars: { autoplay:0, controls:1, enablejsapi:1, origin: window.location.origin },
+        events:{ onStateChange: (e)=>{ if(e.data===0) nextTrack(); } }
+      });
     }
 
     async function addYouTubeToPlaylist(){
@@ -203,8 +171,7 @@
       const t=playlist[i];
       nowTitle.textContent=t.title;
       coverArt.src=t.cover;
-      audio.src = `http://localhost:3000/stream?url=${encodeURIComponent(t.url)}`;
-      audio.play();
+      if(t.type==='youtube'){ ytPlayer.loadVideoById(t.id); }
       btnPlay.textContent='⏸';
       saveState();
       loadLyrics(t.title);
@@ -213,24 +180,24 @@
     function nextTrack(){ shuffle? current=Math.floor(Math.random()*playlist.length): current=(current+1)%playlist.length; playTrack(current); }
     function prevTrack(){ current=(current-1+playlist.length)%playlist.length; playTrack(current); }
 
-    btnPlay.addEventListener('click',()=>{ audio.paused?audio.play():audio.pause(); });
+    btnPlay.addEventListener('click',()=>{ ytPlayer.getPlayerState()===1?ytPlayer.pauseVideo():ytPlayer.playVideo(); });
     btnNext.addEventListener('click',()=>nextTrack());
     btnPrev.addEventListener('click',()=>prevTrack());
     btnShuffle.addEventListener('click',()=>{ shuffle=!shuffle; btnShuffle.classList.toggle('ring-2',shuffle); saveState(); });
     btnRepeat.addEventListener('click',()=>{ repeat=!repeat; btnRepeat.classList.toggle('ring-2',repeat); saveState(); });
 
     // Volume & Speed Controls
-    vol.addEventListener('input',()=>{ audio.volume=vol.value/100; });
-    speed.addEventListener('input',()=>{ audio.playbackRate=parseFloat(speed.value); });
-    resetSpeed.addEventListener('click',()=>{ audio.playbackRate=1; speed.value=1; });
+    vol.addEventListener('input',()=>{ ytPlayer.setVolume(vol.value); });
+    speed.addEventListener('input',()=>{ ytPlayer.setPlaybackRate(parseFloat(speed.value)); });
+    resetSpeed.addEventListener('click',()=>{ speed.value=1; ytPlayer.setPlaybackRate(1); });
 
     // ======= Lyrics =======
     async function loadLyrics(title){
       try{
         const res=await fetch(`https://api.lyrics.ovh/v1/unknown/${encodeURIComponent(title)}`);
         const data=await res.json();
-        const lyrics=data.lyrics?data.lyrics.split('\\n'):["No lyrics found."];
-        lyricsPanel.innerHTML=lyrics.map((line,idx)=>`<div class='lyric-line'>${line}</div>`).join('');
+        const lyrics=data.lyrics?data.lyrics.split('\n'):["No lyrics found."];
+        lyricsPanel.innerHTML=lyrics.map((line)=>`<div class='lyric-line'>${line}</div>`).join('');
       }catch(err){ lyricsPanel.innerHTML='<div>No lyrics found.</div>'; }
     }
 
