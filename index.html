@@ -11,57 +11,43 @@
     :root { color-scheme: dark; }
     body, html { margin: 0; padding: 0; overflow: hidden; background: #0a0a0a; }
 
-    /* Gradient animated button */
     .btn-control {
       background: linear-gradient(270deg, #7e22ce, #9333ea, #a855f7);
       background-size: 600% 600%;
-      color: white;
-      border: none;
-      border-radius: 1rem;
-      padding: 0.75rem 1rem;
-      font-size: 1.25rem;
+      color: white; border: none; border-radius: 1rem;
+      padding: 0.75rem 1rem; font-size: 1.25rem;
       animation: gradientMove 6s ease infinite;
       transition: transform 0.2s, box-shadow 0.2s;
     }
-    .btn-control:hover {
-      box-shadow: 0 0 15px rgba(168, 85, 247, 0.8);
-      transform: scale(1.05);
-    }
-    @keyframes gradientMove {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
+    .btn-control:hover { box-shadow: 0 0 15px rgba(168,85,247,.8); transform: scale(1.05); }
+    @keyframes gradientMove { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-    /* Lyrics sidebar */
+    /* Panels */
     #lyricsPanel {
-      position: fixed; top: 0; right: -400px;
-      width: 350px; height: 100%;
-      background: rgba(20,20,30,0.95);
-      border-left: 2px solid #4b0082;
-      overflow-y: auto; padding: 1rem;
-      transition: right 0.4s ease;
-      z-index: 20;
+      position: fixed; top: 0; right: -420px; width: 380px; height: 100%;
+      background: rgba(20,20,30,0.95); border-left: 2px solid #4b0082;
+      overflow-y: auto; padding: 1rem; transition: right .4s ease; z-index: 20;
     }
     #lyricsPanel.open { right: 0; }
-    .lyric-line {
-      margin-bottom: .5rem;
-      padding: .5rem;
-      border-radius: .5rem;
-      background: rgba(255,255,255,0.05);
-    }
-
-    /* Queue sidebar */
     #queuePanel {
-      position: fixed; top: 0; left: -400px;
-      width: 350px; height: 100%;
-      background: rgba(20,20,20,0.95);
-      border-right: 2px solid #333;
-      overflow-y: auto; padding: 1rem;
-      transition: left 0.4s ease;
-      z-index: 20;
+      position: fixed; top: 0; left: -420px; width: 380px; height: 100%;
+      background: rgba(20,20,20,0.95); border-right: 2px solid #333;
+      overflow-y: auto; padding: 1rem; transition: left .4s ease; z-index: 20;
     }
     #queuePanel.open { left: 0; }
+    .lyric-line { margin-bottom: .35rem; padding: .35rem .5rem; border-radius: .5rem; background: rgba(255,255,255,.05); }
+    .lyric-active { background: rgba(168,85,247,.25); box-shadow: 0 0 10px rgba(168,85,247,.6); }
+
+    /* Small pill buttons */
+    .pill { padding: .35rem .6rem; border-radius: .75rem; background: #1f1f23; }
+    .pill:hover { background:#2a2a30; }
+
+    /* Modal */
+    .modal {
+      position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 50;
+      background: rgba(0,0,0,.6);
+    }
+    .modal.open { display:flex; }
   </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 min-h-screen relative">
@@ -69,29 +55,41 @@
     <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Drum & Bass</h1>
-        <p class="text-neutral-400">YouTube • Queue • Lyrics</p>
+        <p class="text-neutral-400">YouTube • Queue • Lyrics • Faves • Stats</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
         <button id="btnQueue" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📖 Queue</button>
         <button id="btnLyrics" class="px-3 py-2 rounded-xl bg-purple-700 hover:bg-purple-600">Lyrics</button>
-        <button id="btnShare" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Share</button>
+        <button id="btnFaves" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">⭐ Faves</button>
+        <button id="btnStats" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📊 Stats</button>
+        <button id="btnImport" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📥 Import</button>
+        <button id="btnExport" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📤 Export</button>
+        <button id="btnShare" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">🔗 Share</button>
+        <input id="fileImport" type="file" accept="application/json,.json,.lrc,.txt" class="hidden" />
       </div>
     </header>
 
     <section class="mt-6">
       <input id="youtubeInput" placeholder="Paste YouTube URL here" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none" />
-      <button onclick="addYouTubeToPlaylist()" class="mt-2 px-4 py-2 rounded-xl bg-red-600 text-white">Add to Queue</button>
+      <div class="flex gap-2 mt-2">
+        <button onclick="addYouTubeToPlaylist()" class="px-4 py-2 rounded-xl bg-red-600 text-white">Add to Queue</button>
+        <button id="btnPasteLRC" class="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Import LRC to Lyrics</button>
+      </div>
     </section>
 
     <section class="mt-6 p-4 rounded-3xl bg-neutral-900/70 border border-neutral-800 shadow-xl backdrop-blur">
       <div class="flex items-center gap-4">
         <img id="coverArt" alt="Cover" class="w-24 h-24 rounded-2xl object-cover bg-neutral-800" />
-        <div class="min-w-0">
-          <div id="nowTitle" class="text-xl font-bold truncate">—</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-3">
+            <div id="nowTitle" class="text-xl font-bold truncate flex-1">—</div>
+            <button id="btnFavToggle" class="pill">⭐</button>
+          </div>
+          <div class="text-sm text-neutral-400 mt-1" id="nowInfo">—</div>
         </div>
       </div>
 
-      <div class="mt-4 flex items-center gap-2">
+      <div class="mt-4 flex items-center gap-2 flex-wrap">
         <button id="btnPrev" class="btn-control">⏮️</button>
         <button id="btnPlay" class="btn-control">▶</button>
         <button id="btnNext" class="btn-control">⏭️</button>
@@ -99,29 +97,85 @@
         <button id="btnRepeat" class="btn-control">🔁</button>
       </div>
 
-      <div class="mt-4 flex flex-col gap-2">
-        <label>Volume</label>
-        <input id="vol" type="range" min="0" max="100" value="100" />
-        <label>Speed</label>
-        <input id="speed" type="range" min="0.5" max="2" step="0.1" value="1" />
-        <button id="resetSpeed" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 mt-1">Reset Speed</button>
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm text-neutral-400">Volume</label>
+          <input id="vol" type="range" min="0" max="100" value="100" class="w-full" />
+        </div>
+        <div>
+          <label class="text-sm text-neutral-400">Speed</label>
+          <input id="speed" type="range" min="0.5" max="2" step="0.1" value="1" class="w-full" />
+        </div>
+        <div class="flex items-end">
+          <button id="resetSpeed" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 w-full">Reset Speed</button>
+        </div>
       </div>
 
-      <div id="player"></div>
+      <div id="player" class="mt-4"></div>
     </section>
   </div>
 
-  <div id="lyricsPanel"></div>
+  <!-- Panels -->
+  <div id="lyricsPanel">
+    <div class="flex gap-2 mb-3">
+      <button id="tabSynced" class="pill">⏱️ Synced</button>
+      <button id="tabPlain" class="pill">📄 Static</button>
+      <button id="btnClearLyrics" class="pill ml-auto">🧹 Clear</button>
+    </div>
+    <div id="lyricsSynced"></div>
+    <div id="lyricsPlain" class="hidden"></div>
+  </div>
+
   <div id="queuePanel"></div>
 
+  <!-- Faves modal -->
+  <div id="modalFaves" class="modal">
+    <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 w-[min(92vw,720px)]">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-xl font-bold">⭐ Favorites</h3>
+        <button class="pill" onclick="closeModal('modalFaves')">Close</button>
+      </div>
+      <div id="favesList" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- Stats modal -->
+  <div id="modalStats" class="modal">
+    <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 w-[min(92vw,720px)]">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-xl font-bold">📊 Listening Stats</h3>
+        <button class="pill" onclick="closeModal('modalStats')">Close</button>
+      </div>
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <div class="p-3 rounded-xl bg-neutral-800">
+          <div class="text-neutral-400 text-sm">Total Plays</div>
+          <div id="statPlays" class="text-2xl font-bold">0</div>
+        </div>
+        <div class="p-3 rounded-xl bg-neutral-800">
+          <div class="text-neutral-400 text-sm">Listening Time</div>
+          <div id="statTime" class="text-2xl font-bold">0:00:00</div>
+        </div>
+        <div class="p-3 rounded-xl bg-neutral-800">
+          <div class="text-neutral-400 text-sm">Unique Tracks</div>
+          <div id="statUnique" class="text-2xl font-bold">0</div>
+        </div>
+      </div>
+      <h4 class="font-semibold mb-2">Top Tracks</h4>
+      <div id="statTop" class="space-y-2"></div>
+    </div>
+  </div>
+
   <script>
+    // ======= State =======
     let playlist = JSON.parse(localStorage.getItem('velkziePlaylist') || '[]');
     let shuffle = JSON.parse(localStorage.getItem('velkzieShuffle') || 'false');
     let repeat = JSON.parse(localStorage.getItem('velkzieRepeat') || 'false');
+    let favorites = JSON.parse(localStorage.getItem('velkzieFaves') || '[]'); // [{id,title,url,cover}]
+    let stats = JSON.parse(localStorage.getItem('velkzieStats') || '{"plays":{},"time":0}');
     let current = 0;
-    let ytPlayer;
-    let ytReady = false;
+    let ytPlayer, ytReady = false, progressTimer = null;
 
+    // ======= Elements =======
     const btnPlay = document.getElementById('btnPlay');
     const btnPrev = document.getElementById('btnPrev');
     const btnNext = document.getElementById('btnNext');
@@ -130,31 +184,47 @@
     const btnLyrics = document.getElementById('btnLyrics');
     const btnQueue = document.getElementById('btnQueue');
     const btnShare = document.getElementById('btnShare');
+    const btnFaves = document.getElementById('btnFaves');
+    const btnStats = document.getElementById('btnStats');
+    const btnImport = document.getElementById('btnImport');
+    const btnExport = document.getElementById('btnExport');
+    const fileImport = document.getElementById('fileImport');
+    const btnPasteLRC = document.getElementById('btnPasteLRC');
     const vol = document.getElementById('vol');
     const speed = document.getElementById('speed');
     const resetSpeed = document.getElementById('resetSpeed');
     const coverArt = document.getElementById('coverArt');
     const nowTitle = document.getElementById('nowTitle');
+    const nowInfo = document.getElementById('nowInfo');
     const lyricsPanel = document.getElementById('lyricsPanel');
     const queuePanel = document.getElementById('queuePanel');
+    const lyricsSynced = document.getElementById('lyricsSynced');
+    const lyricsPlain = document.getElementById('lyricsPlain');
+    const tabSynced = document.getElementById('tabSynced');
+    const tabPlain = document.getElementById('tabPlain');
+    const btnClearLyrics = document.getElementById('btnClearLyrics');
+    const btnFavToggle = document.getElementById('btnFavToggle');
 
     function saveState(){
       localStorage.setItem('velkziePlaylist', JSON.stringify(playlist));
       localStorage.setItem('velkzieShuffle', JSON.stringify(shuffle));
       localStorage.setItem('velkzieRepeat', JSON.stringify(repeat));
+      localStorage.setItem('velkzieFaves', JSON.stringify(favorites));
+      localStorage.setItem('velkzieStats', JSON.stringify(stats));
     }
 
-    // ======= YouTube Integration =======
+    // ======= YouTube Player =======
     function onYouTubeIframeAPIReady() {
       ytPlayer = new YT.Player('player', {
-        height: '200',
-        width: '320',
-        videoId: '',
+        height: '200', width: '320', videoId: '',
         playerVars: { autoplay: 0, controls: 1, enablejsapi: 1, origin: window.location.origin },
         events: {
           onReady: () => { ytReady = true; },
           onStateChange: (e) => {
-            if (e.data === 0) {
+            if (e.data === 1) startProgressTick();
+            if (e.data === 2 || e.data === -1) stopProgressTick();
+            if (e.data === 0) { // ended
+              accumulateTime(); // finalize time on end
               if (repeat) playTrack(current);
               else if (current < playlist.length - 1) nextTrack();
             }
@@ -163,8 +233,9 @@
       });
     }
 
+    // ======= Queue & Playback =======
     async function addYouTubeToPlaylist(){
-      const url = document.getElementById('youtubeInput').value;
+      const url = document.getElementById('youtubeInput').value.trim();
       let id=null;
       if(url.includes('v=')) id=url.split('v=')[1].split('&')[0];
       else if(url.includes('youtu.be/')) id=url.split('youtu.be/')[1].split('?')[0];
@@ -172,38 +243,47 @@
         try{
           const res=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
           const data=await res.json();
-          playlist.push({type:'youtube', id, title:data.title, url:`https://www.youtube.com/watch?v=${id}`, cover:data.thumbnail_url});
-          saveState();
-          renderQueue();
-          if (playlist.length === 1) playTrack(0); // autoplay first added track
+          const track = {type:'youtube', id, title:data.title, url:`https://www.youtube.com/watch?v=${id}`, cover:data.thumbnail_url};
+          playlist.push(track);
+          saveState(); renderQueue();
+          if (playlist.length === 1) playTrack(0); // autoplay first
         }catch(err){ alert('Could not load YouTube track'); }
       }
     }
 
     function renderQueue(){
-      queuePanel.innerHTML = `<h2 class='font-bold mb-2'>Queue</h2>`;
+      queuePanel.innerHTML = `<h2 class='font-bold mb-3'>Queue</h2>`;
       playlist.forEach((t,i)=>{
-        const div=document.createElement('div');
-        div.className='flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 mb-1';
-        div.innerHTML=`<span class='truncate'>${t.title}</span><div class='flex gap-2'><button onclick='playTrack(${i})'>▶</button><button onclick='removeTrack(${i})'>❌</button></div>`;
-        queuePanel.appendChild(div);
+        const row = document.createElement('div');
+        row.className='flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 mb-1';
+        row.innerHTML = `
+          <div class="min-w-0 flex-1 truncate">${i===current?'<span class="text-purple-400 mr-2">►</span>':''}${t.title}</div>
+          <div class="flex items-center gap-2">
+            <button class="pill" onclick='playTrack(${i})'>▶</button>
+            <button class="pill" onclick='toggleFavByTrack(${i})'>⭐</button>
+            <button class="pill" onclick='removeTrack(${i})'>❌</button>
+          </div>`;
+        queuePanel.appendChild(row);
       });
       if(playlist.length>0){
         const clearBtn=document.createElement('button');
         clearBtn.textContent='Clear Queue';
-        clearBtn.className='mt-3 px-3 py-2 rounded-xl bg-red-700 hover:bg-red-600';
+        clearBtn.className='mt-3 px-3 py-2 rounded-xl bg-red-700 hover:bg-red-600 w-full';
         clearBtn.onclick=()=>{ playlist=[]; saveState(); renderQueue(); };
         queuePanel.appendChild(clearBtn);
       }
     }
 
-    function removeTrack(i){ playlist.splice(i,1); saveState(); renderQueue(); }
+    function removeTrack(i){ playlist.splice(i,1); if(current>=playlist.length) current = Math.max(0, playlist.length-1); saveState(); renderQueue(); }
 
     function playTrack(i){
       current=i;
       const t=playlist[i];
       nowTitle.textContent=t.title;
       coverArt.src=t.cover;
+      nowInfo.textContent = `YouTube • ${t.id}`;
+      setFavUI(isFav(t.id));
+
       if(t.type==='youtube'){
         if(ytReady){
           ytPlayer.loadVideoById(t.id);
@@ -219,8 +299,10 @@
         }
       }
       btnPlay.textContent='⏸';
+      bumpPlays(t.id, t.title);
+      loadLyricsSmart(t.title, t.id);
+      renderQueue();
       saveState();
-      loadLyrics(t.title);
     }
 
     function nextTrack(){ shuffle? current=Math.floor(Math.random()*playlist.length): current=(current+1)%playlist.length; playTrack(current); }
@@ -237,26 +319,310 @@
     speed.addEventListener('input',()=>{ ytPlayer.setPlaybackRate(parseFloat(speed.value)); });
     resetSpeed.addEventListener('click',()=>{ speed.value=1; ytPlayer.setPlaybackRate(1); });
 
-    // ======= Lyrics =======
-    async function loadLyrics(title){
-      try{
-        const res=await fetch(`https://api.lyrics.ovh/v1/unknown/${encodeURIComponent(title)}`);
-        const data=await res.json();
-        const lyrics=data.lyrics?data.lyrics.split('\n'):["No lyrics found."];
-        lyricsPanel.innerHTML=lyrics.map(line=>`<div class='lyric-line'>${line}</div>`).join('');
-      }catch(err){ lyricsPanel.innerHTML='<div>No lyrics found.</div>'; }
+    // ======= Favorites =======
+    function isFav(id){ return favorites.some(f=>f.id===id); }
+    function setFavUI(on){ btnFavToggle.textContent = on ? '⭐ Faved' : '⭐'; btnFavToggle.classList.toggle('ring-2', on); }
+    function toggleFavByTrack(i){ const t=playlist[i]; toggleFav(t); }
+    function toggleFav(currentTrack){
+      const idx = favorites.findIndex(f=>f.id===currentTrack.id);
+      if(idx>-1) favorites.splice(idx,1);
+      else favorites.push({id: currentTrack.id, title: currentTrack.title, url: currentTrack.url, cover: currentTrack.cover});
+      setFavUI(isFav(currentTrack.id));
+      saveState();
+    }
+    btnFavToggle.addEventListener('click',()=>{ if(!playlist[current]) return; toggleFav(playlist[current]); });
+
+    btnFaves.addEventListener('click', ()=> openFaves());
+    function openFaves(){
+      const list = document.getElementById('favesList');
+      list.innerHTML = '';
+      if(favorites.length===0){ list.innerHTML = '<div class="text-neutral-400">No favorites yet.</div>'; }
+      favorites.forEach((f,i)=>{
+        const row = document.createElement('div');
+        row.className='flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800';
+        row.innerHTML = `
+          <div class="min-w-0 truncate">${f.title}</div>
+          <div class="flex gap-2">
+            <button class="pill" onclick="addFavToQueue(${i})">➕ Queue</button>
+            <button class="pill" onclick="removeFav(${i})">🗑️</button>
+          </div>`;
+        list.appendChild(row);
+      });
+      openModal('modalFaves');
+    }
+    function addFavToQueue(i){
+      const f = favorites[i];
+      playlist.push({type:'youtube', id:f.id, title:f.title, url:f.url, cover:f.cover});
+      saveState(); renderQueue();
+    }
+    function removeFav(i){ favorites.splice(i,1); saveState(); openFaves(); }
+
+    // ======= Stats =======
+    function bumpPlays(id, title){
+      stats.plays[id] = stats.plays[id] || {title, count:0, time:0};
+      stats.plays[id].count += 1;
+      lastStart = Date.now();
+      saveState();
+    }
+    let lastStart = null;
+    function accumulateTime(){
+      if(lastStart && ytPlayer && ytPlayer.getPlayerState()!==1){
+        const delta = Math.max(0, Date.now()-lastStart)/1000; // seconds
+        stats.time += delta;
+        const t = playlist[current];
+        if(t && stats.plays[t.id]) stats.plays[t.id].time += delta;
+        lastStart = null;
+        saveState();
+      }
+    }
+    function startProgressTick(){
+      stopProgressTick();
+      lastStart = lastStart || Date.now();
+      progressTimer = setInterval(()=>{}, 1000); // reserved for future UI progress
+    }
+    function stopProgressTick(){
+      clearInterval(progressTimer); progressTimer=null;
+      accumulateTime();
     }
 
+    btnStats.addEventListener('click', ()=> openStats());
+    function formatTime(sec){
+      sec = Math.floor(sec);
+      const h = Math.floor(sec/3600);
+      const m = Math.floor((sec%3600)/60);
+      const s = sec%60;
+      return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+    function openStats(){
+      // Totals
+      const totalPlays = Object.values(stats.plays).reduce((a,b)=>a+b.count,0);
+      document.getElementById('statPlays').textContent = String(totalPlays);
+      document.getElementById('statTime').textContent = formatTime(stats.time||0);
+      document.getElementById('statUnique').textContent = String(Object.keys(stats.plays).length);
+
+      // Top tracks
+      const top = Object.entries(stats.plays)
+        .sort(([,a],[,b]) => (b.count - a.count) || (b.time - a.time))
+        .slice(0,10);
+      const statTop = document.getElementById('statTop');
+      statTop.innerHTML = '';
+      top.forEach(([id,entry])=>{
+        const row = document.createElement('div');
+        row.className='flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900';
+        row.innerHTML = `<div class="min-w-0 truncate">${entry.title}</div>
+                         <div class="text-sm text-neutral-400">plays: ${entry.count} • ${formatTime(entry.time)}</div>`;
+        statTop.appendChild(row);
+      });
+      openModal('modalStats');
+    }
+
+    // ======= Lyrics (smart) =======
+    let syncedMap = []; // [{t:number, text:string}]
+    let syncTick = null;
+
+    async function loadLyricsSmart(title, videoId){
+      // clear
+      syncedMap = []; lyricsSynced.innerHTML=''; lyricsPlain.innerHTML='';
+      // Try providers in order:
+      // 1) Static lyrics providers
+      let staticText = await tryStaticLyrics(title);
+      if(staticText){
+        lyricsPlain.innerHTML = staticText.split('\n').map(line=>`<div class="lyric-line">${line || '&nbsp;'}</div>`).join('');
+      } else {
+        lyricsPlain.innerHTML = `<div class="text-neutral-400">No static lyrics found yet.</div>`;
+      }
+      // 2) Try YouTube captions for synced lines (no API key)
+      const captions = await fetchYouTubeCaptions(videoId);
+      if(captions && captions.length){
+        syncedMap = captions; renderSynced();
+        startSync();
+      } else {
+        // 3) If user provided LRC previously (kept in memory), it will render via paste/import handlers
+        stopSync();
+      }
+    }
+
+    async function tryStaticLyrics(title){
+      const providers = [
+        // Lyrics.ovh (simple; sometimes down)
+        () => fetch(`https://api.lyrics.ovh/v1/unknown/${encodeURIComponent(title)}`).then(r=>r.ok?r.json():null).then(j=>j && j.lyrics || null).catch(()=>null),
+        // Lyrist (community project) – returns {lyrics}
+        () => fetch(`https://lyrist.vercel.app/api/${encodeURIComponent(title)}`).then(r=>r.ok?r.json():null).then(j=>j && (j.lyrics || j.lyric) || null).catch(()=>null),
+      ];
+      for (const p of providers){
+        const out = await p();
+        if(out && String(out).trim().length>0) return out;
+      }
+      return null;
+    }
+
+    async function fetchYouTubeCaptions(videoId){
+      try {
+        // English first, fallback to auto
+        const urls = [
+          `https://video.google.com/timedtext?lang=en&v=${videoId}`,
+          `https://video.google.com/timedtext?lang=en&kind=asr&v=${videoId}`
+        ];
+        for(const u of urls){
+          const res = await fetch(u);
+          if(!res.ok) continue;
+          const txt = await res.text();
+          if(!txt || !txt.includes('<text')) continue;
+          // Parse very simply: <text start="12.34" dur="3.21">hello</text>
+          const parser = new DOMParser();
+          const xml = parser.parseFromString(txt, "text/xml");
+          const nodes = Array.from(xml.getElementsByTagName('text'));
+          const arr = nodes.map(n=>{
+            const start = parseFloat(n.getAttribute('start')||'0');
+            const dur = parseFloat(n.getAttribute('dur')||'2');
+            const raw = n.textContent || '';
+            const clean = decodeHTMLEntities(raw).replace(/\s+/g,' ').trim();
+            return {t:start, end:start+dur, text: clean};
+          }).filter(x=>x.text);
+          if(arr.length) return arr;
+        }
+      } catch(e){ /* ignore */ }
+      return [];
+    }
+    function decodeHTMLEntities(s){
+      const ta = document.createElement('textarea'); ta.innerHTML = s; return ta.value;
+    }
+
+    function renderSynced(){
+      lyricsSynced.innerHTML = syncedMap.map((l,i)=>`<div class="lyric-line" data-idx="${i}">${l.text}</div>`).join('');
+    }
+
+    function startSync(){
+      stopSync();
+      syncTick = setInterval(()=>{
+        if(!ytPlayer || typeof ytPlayer.getCurrentTime!=='function') return;
+        const t = ytPlayer.getCurrentTime();
+        let idx = -1;
+        for(let i=0;i<syncedMap.length;i++){
+          if(t >= syncedMap[i].t && t < (syncedMap[i].end ?? (syncedMap[i].t+2))){
+            idx = i; break;
+          }
+        }
+        // highlight
+        const children = lyricsSynced.children;
+        for(let i=0;i<children.length;i++){
+          children[i].classList.toggle('lyric-active', i===idx);
+          if(i===idx){
+            children[i].scrollIntoView({block:'center', behavior:'smooth'});
+          }
+        }
+      }, 250);
+    }
+    function stopSync(){ clearInterval(syncTick); syncTick=null; }
+
+    // Tabs
+    tabSynced.addEventListener('click',()=>{
+      lyricsSynced.classList.remove('hidden');
+      lyricsPlain.classList.add('hidden');
+    });
+    tabPlain.addEventListener('click',()=>{
+      lyricsPlain.classList.remove('hidden');
+      lyricsSynced.classList.add('hidden');
+    });
+    btnClearLyrics.addEventListener('click',()=>{
+      syncedMap = []; stopSync(); lyricsSynced.innerHTML=''; lyricsPlain.innerHTML='';
+    });
+
+    // LRC import (paste)
+    btnPasteLRC.addEventListener('click', async ()=>{
+      const text = prompt('Paste LRC content here:');
+      if(!text) return;
+      const parsed = parseLRC(text);
+      if(parsed.length){
+        syncedMap = parsed; renderSynced(); startSync();
+        alert('Synced LRC loaded!');
+      } else {
+        lyricsPlain.innerHTML = text.split('\n').map(l=>`<div class="lyric-line">${l}</div>`).join('');
+      }
+    });
+
+    // ======= Import / Export =======
+    btnImport.addEventListener('click',()=> fileImport.click());
+    fileImport.addEventListener('change', async (e)=>{
+      const file = e.target.files?.[0]; if(!file) return;
+      const txt = await file.text();
+      // If looks like LRC, load into lyrics; else assume playlist JSON
+      if(/\[\d{1,2}:\d{2}(?:\.\d{1,2})?\]/.test(txt)){
+        const parsed = parseLRC(txt);
+        if(parsed.length){ syncedMap = parsed; renderSynced(); startSync(); lyricsPanel.classList.add('open'); alert('LRC loaded into synced lyrics.'); }
+        return;
+      }
+      try{
+        const data = JSON.parse(txt);
+        if(Array.isArray(data)){ playlist = data; saveState(); renderQueue(); alert('Playlist imported!'); }
+        else alert('Invalid playlist file.');
+      }catch{ alert('Invalid file. Provide .json playlist or .lrc lyrics.'); }
+    });
+
+    btnExport.addEventListener('click',()=>{
+      const blob = new Blob([JSON.stringify(playlist,null,2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'velkzie-playlist.json';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
+    // ======= Share =======
+    btnShare.addEventListener('click',()=>{
+      const encoded=btoa(JSON.stringify(playlist));
+      const url=`${location.origin}${location.pathname}?playlist=${encoded}`;
+      prompt('Share this link:',url);
+    });
+
+    // ======= Panels & Modals =======
     btnLyrics.addEventListener('click',()=>{ lyricsPanel.classList.toggle('open'); });
     btnQueue.addEventListener('click',()=>{ queuePanel.classList.toggle('open'); });
 
-    // ======= Share Playlist =======
-    btnShare.addEventListener('click',()=>{ const encoded=btoa(JSON.stringify(playlist)); const url=`${location.origin}${location.pathname}?playlist=${encoded}`; prompt('Share this link:',url); });
+    function openModal(id){ document.getElementById(id).classList.add('open'); }
+    function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+    window.openModal = openModal; window.closeModal = closeModal;
 
+    // ======= Helpers =======
+    function parseLRC(text){
+      // returns [{t, end?, text}]
+      const lines = text.split(/\r?\n/);
+      const out = [];
+      const timeRe = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]/g;
+      for(const line of lines){
+        let m; let times=[];
+        while((m = timeRe.exec(line)) !== null){
+          const min = parseInt(m[1]); const sec = parseInt(m[2]); const cs = m[3]?parseInt(m[3]):0;
+          const t = min*60 + sec + (cs/100);
+          times.push(t);
+        }
+        const textPart = line.replace(timeRe, '').trim();
+        times.forEach(t=> out.push({t, text: textPart}));
+      }
+      out.sort((a,b)=>a.t-b.t);
+      for(let i=0;i<out.length;i++){
+        out[i].end = out[i+1]? out[i+1].t : (out[i].t + 5);
+      }
+      return out;
+    }
+
+    // URL playlist import via query
     const params=new URLSearchParams(window.location.search);
-    if(params.has('playlist')){ try{ const shared=JSON.parse(atob(params.get('playlist'))); playlist=shared; renderQueue(); }catch(err){ console.error('Invalid playlist link'); } }
+    if(params.has('playlist')){
+      try{ const shared=JSON.parse(atob(params.get('playlist'))); playlist=shared; }catch(err){ console.error('Invalid playlist link'); }
+    }
 
+    // Buttons glow for toggles
+    if(shuffle) btnShuffle.classList.add('ring-2');
+    if(repeat) btnRepeat.classList.add('ring-2');
+
+    // Init UI
     renderQueue();
+
+    // Expose for inline onclick in favorites modal
+    window.addFavToQueue = addFavToQueue;
+    window.removeFav = removeFav;
+    window.toggleFavByTrack = toggleFavByTrack;
+
   </script>
 </body>
 </html>
