@@ -5,58 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Velkzie Drum & Bass — Web Player</title>
   <meta name="description" content="A lightweight Drum & Bass web app branded by Velkzie." />
-  <!-- Tailwind via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
     audio::-webkit-media-controls { display:none !important; }
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
-    ::-webkit-scrollbar-thumb { background: #2e2e2e; border-radius: 8px; }
-    ::-webkit-scrollbar-track { background: #111; }
   </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 min-h-screen">
   <div class="max-w-6xl mx-auto p-4 md:p-8">
-    <!-- Header -->
     <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Drum & Bass</h1>
-        <p class="text-neutral-400">A self‑hosted DnB player — by Velkzie.</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button id="importJsonBtn" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Import JSON</button>
-        <button id="exportJsonBtn" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Export JSON</button>
-        <a id="repoLink" href="#" target="_blank" class="hidden md:inline px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800">View on GitHub</a>
+        <p class="text-neutral-400">A self‑hosted DnB + YouTube player — by Velkzie.</p>
       </div>
     </header>
 
-    <!-- Search & Filters -->
-    <section class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-      <label class="col-span-2">
-        <span class="sr-only">Search</span>
-        <input id="searchInput" placeholder="Search title, artist, tags…" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none focus:border-neutral-600" />
-      </label>
-      <div class="flex gap-2">
-        <select id="bpmMin" class="flex-1 px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">
-          <option value="">BPM ≥</option>
-          <option>160</option>
-          <option>170</option>
-          <option>172</option>
-          <option>174</option>
-          <option>176</option>
-        </select>
-        <select id="bpmMax" class="flex-1 px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">
-          <option value="">BPM ≤</option>
-          <option>170</option>
-          <option>172</option>
-          <option>174</option>
-          <option>176</option>
-          <option>180</option>
-        </select>
-      </div>
+    <!-- Input for YouTube -->
+    <section class="mt-6">
+      <input id="youtubeInput" placeholder="Paste YouTube URL here" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none" />
+      <button onclick="loadYouTube()" class="mt-2 px-4 py-2 rounded-xl bg-red-600 text-white">Load YouTube Track</button>
     </section>
 
-    <!-- Player Card -->
+    <!-- YouTube Player -->
+    <div id="ytContainer" class="mt-4 hidden">
+      <div id="player"></div>
+    </div>
+
+    <!-- Audio Player Card -->
     <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 p-4 rounded-3xl bg-gradient-to-b from-neutral-900 to-neutral-950 border border-neutral-800 shadow-xl">
         <div class="flex items-center gap-4">
@@ -68,49 +44,45 @@
           </div>
         </div>
 
-        <canvas id="viz" class="mt-4 w-full rounded-2xl bg-neutral-950 border border-neutral-800" height="120"></canvas>
-
-        <div class="mt-4">
-          <input id="seek" type="range" min="0" max="1000" value="0" class="w-full" />
-          <div class="flex justify-between text-xs text-neutral-400 mt-1">
-            <span id="curTime">0:00</span>
-            <span id="durTime">0:00</span>
-          </div>
-        </div>
-
         <div class="mt-4 flex items-center gap-2">
-          <button id="btnPrev" title="Prev [←]" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏮️</button>
-          <button id="btnPlay" title="Play/Pause [Space]" class="px-6 py-3 rounded-2xl bg-neutral-100 text-neutral-900 font-semibold">▶</button>
-          <button id="btnNext" title="Next [→]" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏭️</button>
-          <button id="btnShuffle" title="Shuffle [S]" class="ml-2 px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">🔀</button>
-          <button id="btnLoop" title="Loop [L]" class="px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">🔁</button>
-          <button id="btnLike" title="Favourite [F]" class="ml-auto px-3 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">♡</button>
+          <button id="btnPrev" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏮️</button>
+          <button id="btnPlay" class="px-6 py-3 rounded-2xl bg-neutral-100 text-neutral-900 font-semibold">▶</button>
+          <button id="btnNext" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏭️</button>
           <input id="vol" type="range" min="0" max="1" step="0.01" value="1" class="w-32" title="Volume" />
         </div>
 
         <audio id="audio" crossorigin="anonymous" controls></audio>
       </div>
 
-      <!-- Playlist -->
       <aside class="lg:col-span-1 p-4 rounded-3xl bg-neutral-950 border border-neutral-800">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="font-bold">Playlist</h2>
-          <div class="text-xs text-neutral-400">Drag to reorder</div>
-        </div>
+        <h2 class="font-bold mb-2">Playlist</h2>
         <ul id="list" class="space-y-1 max-h-[520px] overflow-auto pr-1"></ul>
       </aside>
     </section>
-
-    <!-- Footer -->
-    <footer class="mt-8 text-xs text-neutral-500">
-      <p><strong>Velkzie Drum & Bass</strong> — Hosted on GitHub Pages. Replace sample track URLs with your own MP3/OGG files in the repo to make them play directly. Favourites & order save to your browser (localStorage).</p>
-    </footer>
   </div>
 
-  <input id="fileInput" type="file" accept="application/json" class="hidden" />
-
   <script>
-    // ======= Sample Library (replace with your own) =======
+    // ======= YouTube Integration =======
+    let ytPlayer;
+    function onYouTubeIframeAPIReady() {
+      ytPlayer = new YT.Player('player', {
+        height: '200',
+        width: '320',
+        videoId: '',
+        playerVars: { 'autoplay': 1, 'controls': 1 }
+      });
+    }
+
+    function loadYouTube() {
+      const url = document.getElementById("youtubeInput").value;
+      const id = url.includes("v=") ? url.split("v=")[1].split("&")[0] : url.split("youtu.be/")[1];
+      if (id) {
+        document.getElementById("ytContainer").classList.remove("hidden");
+        ytPlayer.loadVideoById(id);
+      }
+    }
+
+    // ======= Sample Local Tracks =======
     const DEFAULT_TRACKS = [
       {
         id: crypto.randomUUID(),
@@ -119,8 +91,7 @@
         url: "tracks/liquid-roller.mp3",
         cover: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200",
         bpm: 174,
-        tags: ["liquid", "roller"],
-        length: 0
+        tags: ["liquid", "roller"]
       },
       {
         id: crypto.randomUUID(),
@@ -129,22 +100,40 @@
         url: "tracks/neurofunk-ripper.mp3",
         cover: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200",
         bpm: 172,
-        tags: ["neuro", "dark"],
-        length: 0
-      },
-      {
-        id: crypto.randomUUID(),
-        title: "Jungle Vibes",
-        artist: "Amen Bro",
-        url: "tracks/jungle-vibes.mp3",
-        cover: "https://images.unsplash.com/photo-1518709281655-49d4f2e83f3a?w=1200",
-        bpm: 165,
-        tags: ["jungle", "breaks"],
-        length: 0
+        tags: ["neuro", "dark"]
       }
     ];
 
-    // (rest of the script stays the same)
+    const audio = document.getElementById('audio');
+    const btnPlay = document.getElementById('btnPlay');
+    const vol = document.getElementById('vol');
+    const listEl = document.getElementById('list');
+
+    let current = 0;
+
+    function renderList() {
+      listEl.innerHTML = '';
+      DEFAULT_TRACKS.forEach((t, i) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<button onclick="playTrack(${i})" class="w-full text-left px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800">${t.title} — ${t.artist}</button>`;
+        listEl.appendChild(li);
+      });
+    }
+
+    function playTrack(i) {
+      current = i;
+      audio.src = DEFAULT_TRACKS[i].url;
+      audio.play();
+      btnPlay.textContent = '⏸';
+    }
+
+    btnPlay.addEventListener('click', () => {
+      if (audio.paused) { audio.play(); btnPlay.textContent = '⏸'; } else { audio.pause(); btnPlay.textContent = '▶'; }
+    });
+
+    vol.addEventListener('input', () => { audio.volume = Number(vol.value); });
+
+    renderList();
   </script>
 </body>
 </html>
