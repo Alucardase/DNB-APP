@@ -4,13 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Velkzie Drum & Bass — Web Player</title>
-  <meta name="description" content="A Drum & Bass web app with YouTube + MP3 playlist, shuffle, repeat, and waveform background visualizer." />
+  <meta name="description" content="Drum & Bass app with YouTube + MP3 playlist, shuffle, repeat, waveform visualizer, lyrics, and sharing." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
     body, html { margin: 0; padding: 0; overflow: hidden; }
     canvas#bgViz { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+
+    /* Lyrics sidebar */
+    #lyricsPanel { position: fixed; top: 0; right: -400px; width: 350px; height: 100%; background: rgba(20,20,30,0.95); border-left: 2px solid #4b0082; overflow-y: auto; padding: 1rem; transition: right 0.4s ease; z-index: 20; }
+    #lyricsPanel.open { right: 0; }
+    .lyric-line { margin-bottom: .5rem; padding: .5rem; border-radius: .5rem; background: rgba(255,255,255,0.05); }
+    .lyric-active { background: rgba(128,0,128,0.3); box-shadow: 0 0 10px rgba(128,0,128,0.6); animation: glow 2s ease-in-out infinite alternate; }
+    @keyframes glow { from { box-shadow: 0 0 5px rgba(128,0,128,0.4); } to { box-shadow: 0 0 15px rgba(128,0,128,0.8); } }
   </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 min-h-screen relative">
@@ -19,7 +26,11 @@
     <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Drum & Bass</h1>
-        <p class="text-neutral-400">YouTube + MP3 Player with Visualizer</p>
+        <p class="text-neutral-400">Playlists • YouTube • Lyrics • Visualizer</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="btnLyrics" class="px-3 py-2 rounded-xl bg-purple-700 hover:bg-purple-600">Lyrics</button>
+        <button id="btnShare" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Share Playlist</button>
       </div>
     </header>
 
@@ -58,6 +69,8 @@
     </section>
   </div>
 
+  <div id="lyricsPanel"></div>
+
   <script>
     // ======= State =======
     let playlist = JSON.parse(localStorage.getItem('velkziePlaylist') || '[]');
@@ -71,13 +84,15 @@
     const btnNext = document.getElementById('btnNext');
     const btnShuffle = document.getElementById('btnShuffle');
     const btnRepeat = document.getElementById('btnRepeat');
+    const btnLyrics = document.getElementById('btnLyrics');
+    const btnShare = document.getElementById('btnShare');
     const vol = document.getElementById('vol');
     const listEl = document.getElementById('list');
     const coverArt = document.getElementById('coverArt');
     const nowTitle = document.getElementById('nowTitle');
     const nowArtist = document.getElementById('nowArtist');
+    const lyricsPanel = document.getElementById('lyricsPanel');
 
-    // Default tracks
     if (playlist.length === 0) {
       playlist = [
         {type:'mp3', title:'Liquid Roller', artist:'DJ Placeholder', url:'tracks/liquid-roller.mp3', cover:'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200'},
@@ -127,11 +142,7 @@
       });
     }
 
-    function removeTrack(i){
-      playlist.splice(i,1);
-      saveState();
-      renderList();
-    }
+    function removeTrack(i){ playlist.splice(i,1); saveState(); renderList(); }
 
     // ======= Playback =======
     function playTrack(i){
@@ -152,69 +163,62 @@
       }
       btnPlay.textContent='⏸';
       saveState();
+      loadLyrics(t.title,t.artist);
     }
 
-    function nextTrack(){
-      if(shuffle){ current=Math.floor(Math.random()*playlist.length); }
-      else{ current=(current+1)%playlist.length; }
-      playTrack(current);
-    }
+    function nextTrack(){ shuffle? current=Math.floor(Math.random()*playlist.length): current=(current+1)%playlist.length; playTrack(current); }
     function prevTrack(){ current=(current-1+playlist.length)%playlist.length; playTrack(current); }
 
-    btnPlay.addEventListener('click',()=>{
-      if(audio.classList.contains('hidden')){ ytPlayer.getPlayerState()===1?ytPlayer.pauseVideo():ytPlayer.playVideo(); }
-      else{ if(audio.paused){ audio.play(); btnPlay.textContent='⏸'; } else { audio.pause(); btnPlay.textContent='▶'; } }
-    });
-
+    btnPlay.addEventListener('click',()=>{ if(audio.classList.contains('hidden')){ ytPlayer.getPlayerState()===1?ytPlayer.pauseVideo():ytPlayer.playVideo(); } else { if(audio.paused){ audio.play(); btnPlay.textContent='⏸'; } else { audio.pause(); btnPlay.textContent='▶'; } } });
     btnNext.addEventListener('click',()=>nextTrack());
     btnPrev.addEventListener('click',()=>prevTrack());
     btnShuffle.addEventListener('click',()=>{ shuffle=!shuffle; btnShuffle.classList.toggle('ring-2',shuffle); saveState(); });
     btnRepeat.addEventListener('click',()=>{ repeat=!repeat; btnRepeat.classList.toggle('ring-2',repeat); saveState(); });
-
     audio.addEventListener('ended',()=>{ repeat?playTrack(current):nextTrack(); });
     vol.addEventListener('input',()=>{ audio.volume=Number(vol.value); });
 
     renderList();
 
-    // ======= Visualizer (Waveform Background) =======
+    // ======= Lyrics =======
+    async function loadLyrics(title,artist){
+      try{
+        const res=await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
+        const data=await res.json();
+        const lyrics=data.lyrics?data.lyrics.split('\n'):["No lyrics found."];
+        lyricsPanel.innerHTML=lyrics.map((line,idx)=>`<div class='lyric-line' id='lyric-${idx}'>${line}</div>`).join('');
+      }catch(err){ lyricsPanel.innerHTML='<div>No lyrics found.</div>'; }
+    }
+
+    btnLyrics.addEventListener('click',()=>{ lyricsPanel.classList.toggle('open'); });
+
+    // ======= Share Playlist =======
+    btnShare.addEventListener('click',()=>{
+      const encoded=btoa(JSON.stringify(playlist));
+      const url=`${location.origin}${location.pathname}?playlist=${encoded}`;
+      prompt('Share this link:',url);
+    });
+
+    // Load from shared link if provided
+    const params=new URLSearchParams(window.location.search);
+    if(params.has('playlist')){
+      try{ const shared=JSON.parse(atob(params.get('playlist'))); renderList(); playlist=shared; }catch(err){ console.error('Invalid playlist link'); }
+    }
+
+    // ======= Visualizer =======
     const canvas=document.getElementById('bgViz');
     const ctx=canvas.getContext('2d');
     const AudioCtx=window.AudioContext||window.webkitAudioContext;
     const actx=new AudioCtx();
-    const analyser=actx.createAnalyser();
-    analyser.fftSize=2048;
-    const src=actx.createMediaElementSource(audio);
-    src.connect(analyser);
-    analyser.connect(actx.destination);
+    const analyser=actx.createAnalyser(); analyser.fftSize=2048;
+    const src=actx.createMediaElementSource(audio); src.connect(analyser); analyser.connect(actx.destination);
 
-    const bufferLength=analyser.fftSize;
-    const dataArray=new Uint8Array(bufferLength);
-
+    const bufferLength=analyser.fftSize; const dataArray=new Uint8Array(bufferLength);
     function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
     window.addEventListener('resize',resize); resize();
 
-    function draw(){
-      requestAnimationFrame(draw);
-      analyser.getByteTimeDomainData(dataArray);
-      ctx.fillStyle='#000';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-      ctx.lineWidth=2;
-      ctx.strokeStyle='#0ff';
-      ctx.beginPath();
-      const sliceWidth=canvas.width/bufferLength;
-      let x=0;
-      for(let i=0;i<bufferLength;i++){
-        const v=dataArray[i]/128.0;
-        const y=v*canvas.height/2;
-        if(i===0){ ctx.moveTo(x,y); } else { ctx.lineTo(x,y); }
-        x+=sliceWidth;
-      }
-      ctx.lineTo(canvas.width,canvas.height/2);
-      ctx.stroke();
-    }
+    function draw(){ requestAnimationFrame(draw); analyser.getByteTimeDomainData(dataArray); ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.lineWidth=2; ctx.strokeStyle='#a855f7'; ctx.beginPath(); const sliceWidth=canvas.width/bufferLength; let x=0; for(let i=0;i<bufferLength;i++){ const v=dataArray[i]/128.0; const y=v*canvas.height/2; if(i===0){ ctx.moveTo(x,y); } else { ctx.lineTo(x,y); } x+=sliceWidth; } ctx.lineTo(canvas.width,canvas.height/2); ctx.stroke(); }
     draw();
 
-    // Unlock audio
     window.addEventListener('click',()=>{ actx.resume(); },{once:true});
   </script>
 </body>
