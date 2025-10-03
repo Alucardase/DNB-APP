@@ -16,8 +16,20 @@
     .pill:hover{background:#2a2a30;}
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:50;}
     .modal.open{display:flex;}
-    #player{position:relative;width:100%;padding-bottom:56.25%;height:0;margin-top:1rem;border-radius:1rem;overflow:hidden;background:#000;}
-    #player iframe{position:absolute;top:0;left:0;width:100%;height:100%;}
+
+    /* 🔧 Smaller YouTube Player */
+    #player {
+      width: 320px;
+      height: 180px;
+      margin-top: 1rem;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      background: #000;
+    }
+    #player iframe {
+      width: 100%;
+      height: 100%;
+    }
   </style>
 </head>
 <body class="p-4">
@@ -37,6 +49,7 @@
     <button id="btnRepeat" class="btn-control">🔁</button>
   </div>
 
+  <!-- Smaller Video -->
   <div id="player"></div>
 
   <script>
