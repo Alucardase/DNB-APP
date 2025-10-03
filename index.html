@@ -9,8 +9,7 @@
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
-    body, html { margin: 0; padding: 0; overflow: hidden; }
-    canvas#bgViz { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+    body, html { margin: 0; padding: 0; }
 
     /* Gradient animated button */
     .btn-control {
@@ -47,12 +46,11 @@
   </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 min-h-screen relative">
-  <canvas id="bgViz"></canvas>
   <div class="relative z-10 max-w-6xl mx-auto p-4 md:p-8">
     <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Drum & Bass</h1>
-        <p class="text-neutral-400">YouTube • Queue • Lyrics • Visualizer</p>
+        <p class="text-neutral-400">YouTube • Queue • Lyrics</p>
       </div>
       <div class="flex gap-2">
         <button id="btnQueue" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📖 Queue</button>
@@ -131,8 +129,15 @@
       ytPlayer = new YT.Player('player', {
         height: '200', width: '320', videoId: '', playerVars: {autoplay:0,controls:1, enablejsapi:1, origin: window.location.origin},
         events:{ 
-          onReady: () => connectYoutubeAudio(),
-          onStateChange: (e)=>{ if(e.data===0) nextTrack(); }
+          onStateChange: (e)=>{ 
+            if(e.data===0){ // ended
+              if(repeat){
+                playTrack(current); // loop same track
+              } else {
+                nextTrack(); 
+              }
+            }
+          }
         }
       });
     }
@@ -177,9 +182,7 @@
       const t=playlist[i];
       nowTitle.textContent=t.title;
       coverArt.src=t.cover;
-      if(t.type==='youtube'){
-        ytPlayer.loadVideoById(t.id);
-      }
+      if(t.type==='youtube'){ ytPlayer.loadVideoById(t.id); }
       btnPlay.textContent='⏸';
       saveState();
       loadLyrics(t.title);
@@ -225,64 +228,6 @@
     }
 
     renderQueue();
-
-    // ======= Visualizer =======
-    const canvas=document.getElementById('bgViz');
-    const ctx=canvas.getContext('2d');
-    const AudioCtx=window.AudioContext||window.webkitAudioContext;
-    const actx=new AudioCtx();
-    const analyser=actx.createAnalyser(); analyser.fftSize=2048;
-    const bufferLength=analyser.fftSize; const dataArray=new Uint8Array(bufferLength);
-
-    function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
-    window.addEventListener('resize',resize); resize();
-
-    function connectYoutubeAudio(){
-      const iframe=ytPlayer.getIframe();
-      try{
-        const source=actx.createMediaElementSource(iframe);
-        source.connect(analyser);
-        analyser.connect(actx.destination);
-      }catch(e){ console.warn("Could not connect YouTube audio to analyser",e); }
-    }
-
-    function draw(){
-      requestAnimationFrame(draw);
-      analyser.getByteTimeDomainData(dataArray);
-
-      // trailing effect
-      ctx.fillStyle='rgba(0, 0, 0, 0.15)';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-
-      const sliceWidth=canvas.width/bufferLength;
-      let x=0;
-
-      ctx.beginPath();
-      for(let i=0;i<bufferLength;i++){
-        const v=dataArray[i]/128.0;
-        const y=v*canvas.height/2;
-        if(i===0) ctx.moveTo(x,y);
-        else ctx.lineTo(x,y);
-        x+=sliceWidth;
-      }
-      ctx.lineTo(canvas.width,canvas.height/2);
-
-      // Neon glow
-      ctx.shadowBlur=20;
-      ctx.shadowColor='#a855f7';
-      ctx.strokeStyle='#c084fc';
-      ctx.lineWidth=3;
-      ctx.stroke();
-
-      // Inner bright line
-      ctx.shadowBlur=0;
-      ctx.strokeStyle='#ffffff';
-      ctx.lineWidth=1;
-      ctx.stroke();
-    }
-    draw();
-
-    window.addEventListener('click',()=>{ actx.resume(); },{once:true});
   </script>
 </body>
 </html>
