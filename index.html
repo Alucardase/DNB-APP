@@ -115,59 +115,136 @@
     </div>
   </div>
 
-  <!-- Favorites Modal -->
-  <div id="modalFaves" class="modal">…</div>
-
-  <!-- Stats Modal -->
-  <div id="modalStats" class="modal">…</div>
+  <!-- Faves & Stats Modals omitted for brevity (keep your originals) -->
 
   <script>
-    // (your existing script code here…)
-    // ADD HISTORY SUPPORT
+    // ==== STATE ====
+    let playlist = JSON.parse(localStorage.getItem('velkziePlaylist') || '[]');
+    let shuffle = JSON.parse(localStorage.getItem('velkzieShuffle') || 'false');
+    let repeat = JSON.parse(localStorage.getItem('velkzieRepeat') || 'false');
+    let favorites = JSON.parse(localStorage.getItem('velkzieFaves') || '[]');
+    let stats = JSON.parse(localStorage.getItem('velkzieStats') || '{"plays":{},"time":0}');
     let history = JSON.parse(localStorage.getItem('velkzieHistory') || '[]');
+    let current = 0;
+    let ytPlayer, ytReady = false;
+
+    function saveState(){
+      localStorage.setItem('velkziePlaylist', JSON.stringify(playlist));
+      localStorage.setItem('velkzieShuffle', JSON.stringify(shuffle));
+      localStorage.setItem('velkzieRepeat', JSON.stringify(repeat));
+      localStorage.setItem('velkzieFaves', JSON.stringify(favorites));
+      localStorage.setItem('velkzieStats', JSON.stringify(stats));
+      localStorage.setItem('velkzieHistory', JSON.stringify(history));
+    }
+
+    // ==== YOUTUBE PLAYER ====
+    function onYouTubeIframeAPIReady() {
+      ytPlayer = new YT.Player('player', {
+        videoId: '',
+        playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0 },
+        events: { onReady: () => ytReady = true }
+      });
+    }
+
+    // ==== YOUTUBE URL PARSING ====
+    function getYouTubeId(url) {
+      try {
+        const u = new URL(url);
+        if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+        if (u.searchParams.get("v")) return u.searchParams.get("v");
+      } catch {}
+      return null;
+    }
+
+    async function addYouTubeToPlaylist(){
+      const url = document.getElementById('youtubeInput').value.trim();
+      const id = getYouTubeId(url);
+      if (!id) return alert("Invalid YouTube URL");
+      try {
+        const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
+        const data = await res.json();
+        const track = { type:'youtube', id, title:data.title, url:`https://www.youtube.com/watch?v=${id}`, cover:data.thumbnail_url };
+        playlist.push(track);
+        saveState();
+        renderQueue();
+        if (playlist.length === 1) playTrack(0);
+      } catch(err){ alert("Could not load YouTube track"); }
+    }
+
+    // ==== PLAYBACK ====
+    function playTrack(i){
+      current = i;
+      const t = playlist[i];
+      document.getElementById('nowTitle').textContent = t.title;
+      document.getElementById('coverArt').src = t.cover;
+      document.getElementById('nowInfo').textContent = `YouTube • ${t.id}`;
+      saveHistory(t);
+
+      if(t.type==='youtube' && ytReady){
+        ytPlayer.loadVideoById(t.id);
+        ytPlayer.playVideo();
+      }
+      saveState();
+    }
+
+    function nextTrack(){ shuffle ? playTrack(Math.floor(Math.random()*playlist.length)) : playTrack((current+1)%playlist.length); }
+    function prevTrack(){ playTrack((current-1+playlist.length)%playlist.length); }
+
+    // ==== HISTORY ====
     function saveHistory(track){
       history.unshift({ id:track.id, title:track.title, cover:track.cover, url:track.url, time:new Date().toLocaleString() });
       history = history.slice(0,50);
-      localStorage.setItem('velkzieHistory', JSON.stringify(history));
+      saveState();
     }
     function openHistory(){
       const list=document.getElementById('historyList');
       list.innerHTML='';
       if(!history.length){ list.innerHTML='<div class="text-neutral-400">No history yet.</div>'; return; }
       history.forEach(h=>{
-        const row=document.createElement('div');
-        row.className='flex items-center gap-3 p-2 rounded-xl bg-neutral-800';
-        row.innerHTML=`<img src="${h.cover}" class="w-12 h-12 rounded-lg object-cover" />
+        list.innerHTML += `<div class="flex items-center gap-3 p-2 rounded-xl bg-neutral-800">
+          <img src="${h.cover}" class="w-12 h-12 rounded-lg object-cover"/>
           <div class="flex-1 min-w-0"><div class="truncate font-semibold">${h.title}</div>
-          <div class="text-xs text-neutral-400">${h.time}</div></div>`;
-        list.appendChild(row);
+          <div class="text-xs text-neutral-400">${h.time}</div></div>
+        </div>`;
       });
       openModal('modalHistory');
     }
-    document.getElementById('btnHistory').addEventListener('click',openHistory);
+    document.getElementById('btnHistory').addEventListener('click', openHistory);
 
-    // MODIFY playTrack to include history save
-    const originalPlayTrack = playTrack;
-    playTrack = function(i){
-      originalPlayTrack(i);
-      saveHistory(playlist[i]);
-    };
+    // ==== MODALS ====
+    function openModal(id){ document.getElementById(id).classList.add('open'); }
+    function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
-    // LYRIC TRANSLATION
+    // ==== BUTTONS ====
+    document.getElementById('btnPlay').addEventListener('click', ()=> ytPlayer.getPlayerState()===1 ? ytPlayer.pauseVideo() : ytPlayer.playVideo());
+    document.getElementById('btnNext').addEventListener('click', nextTrack);
+    document.getElementById('btnPrev').addEventListener('click', prevTrack);
+    document.getElementById('btnQueue').addEventListener('click', ()=> document.getElementById('queuePanel').classList.toggle('open'));
+    document.getElementById('btnLyrics').addEventListener('click', ()=> document.getElementById('lyricsPanel').classList.toggle('open'));
+
+    // ==== TRANSLATE LYRICS ====
     document.getElementById('btnTranslateLyrics').addEventListener('click', async ()=>{
-      const text=[...lyricsPlain.querySelectorAll('.lyric-line')].map(el=>el.textContent).join("\n");
+      const text=[...document.getElementById('lyricsPlain').querySelectorAll('.lyric-line')].map(el=>el.textContent).join("\n");
       if(!text.trim()) return alert("No lyrics to translate!");
       try{
-        const res=await fetch("https://libretranslate.de/translate",{
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({ q:text, source:"auto", target:"en" })
-        });
+        const res=await fetch("https://libretranslate.de/translate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ q:text, source:"auto", target:"en" })});
         const data=await res.json();
-        const lines=data.translatedText.split("\n");
-        lyricsPlain.innerHTML=lines.map(line=>`<div class="lyric-line">${line}</div>`).join("");
-        tabPlain.click();
-      }catch(e){ alert("Translation failed"); console.error(e); }
+        document.getElementById('lyricsPlain').innerHTML = data.translatedText.split("\n").map(l=>`<div class="lyric-line">${l}</div>`).join("");
+      }catch(e){ alert("Translation failed"); }
     });
+
+    // ==== QUEUE RENDER ====
+    function renderQueue(){
+      const panel=document.getElementById('queuePanel');
+      panel.innerHTML='<h2 class="font-bold mb-3">Queue</h2>';
+      playlist.forEach((t,i)=>{
+        panel.innerHTML += `<div class="flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 mb-1">
+          <div class="min-w-0 flex-1 truncate">${i===current?'<span class="text-purple-400 mr-2">►</span>':''}${t.title}</div>
+          <button class="pill" onclick="playTrack(${i})">▶</button>
+        </div>`;
+      });
+    }
+    renderQueue();
   </script>
 </body>
 </html>
