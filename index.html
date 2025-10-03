@@ -8,243 +8,107 @@
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
-    body, html { margin: 0; padding: 0; overflow: hidden; background: #0a0a0a; }
-    .btn-control {
-      background: linear-gradient(270deg, #7e22ce, #9333ea, #a855f7);
-      background-size: 600% 600%;
-      color: white; border: none; border-radius: 1rem;
-      padding: 0.75rem 1rem; font-size: 1.25rem;
-      animation: gradientMove 6s ease infinite;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .btn-control:hover { box-shadow: 0 0 15px rgba(168,85,247,.8); transform: scale(1.05); }
-    @keyframes gradientMove { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
-    .pill { padding: .35rem .6rem; border-radius: .75rem; background: #1f1f23; }
-    .pill:hover { background:#2a2a30; }
-    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 50; background: rgba(0,0,0,.6); }
-    .modal.open { display:flex; }
-    #player { position: relative; width: 100%; padding-bottom: 56.25%; height: 0; margin-top: 1rem; border-radius: 1rem; overflow: hidden; background: #000; }
-    #player iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    #lyricsPanel, #queuePanel { transition: all .4s ease; z-index: 20; }
-    #lyricsPanel { position: fixed; top:0; right:-420px; width:380px; height:100%; background:rgba(20,20,30,0.95); border-left:2px solid #4b0082; overflow-y:auto; padding:1rem; }
-    #lyricsPanel.open { right:0; }
-    #queuePanel { position:fixed; top:0; left:-420px; width:380px; height:100%; background:rgba(20,20,20,0.95); border-right:2px solid #333; overflow-y:auto; padding:1rem; }
-    #queuePanel.open { left:0; }
-    .lyric-line { margin-bottom:.35rem; padding:.35rem .5rem; border-radius:.5rem; background:rgba(255,255,255,.05); }
-    .lyric-active { background:rgba(168,85,247,.25); box-shadow:0 0 10px rgba(168,85,247,.6); }
+    body { background:#0a0a0a; color:white; margin:0; padding:0; }
+    .btn-control{background:linear-gradient(270deg,#7e22ce,#9333ea,#a855f7);background-size:600% 600%;color:white;border:none;border-radius:1rem;padding:.75rem 1rem;font-size:1.25rem;animation:gradientMove 6s ease infinite;transition:.2s;}
+    .btn-control:hover{box-shadow:0 0 15px rgba(168,85,247,.8);transform:scale(1.05);}
+    @keyframes gradientMove{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+    .pill{padding:.35rem .6rem;border-radius:.75rem;background:#1f1f23;}
+    .pill:hover{background:#2a2a30;}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:50;}
+    .modal.open{display:flex;}
+    #player{position:relative;width:100%;padding-bottom:56.25%;height:0;margin-top:1rem;border-radius:1rem;overflow:hidden;background:#000;}
+    #player iframe{position:absolute;top:0;left:0;width:100%;height:100%;}
   </style>
 </head>
-<body class="bg-neutral-950 text-neutral-100 min-h-screen relative">
-  <div class="relative z-10 max-w-6xl mx-auto p-4 md:p-8">
-    <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-      <div>
-        <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Music Player</h1>
-        <p class="text-neutral-400">YouTube • Queue • Lyrics • Faves • Stats • History</p>
-      </div>
-      <div class="flex gap-2 flex-wrap">
-        <button id="btnQueue" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📖 Queue</button>
-        <button id="btnLyrics" class="px-3 py-2 rounded-xl bg-purple-700 hover:bg-purple-600">Lyrics</button>
-        <button id="btnFaves" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">⭐ Faves</button>
-        <button id="btnStats" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📊 Stats</button>
-        <button id="btnHistory" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📜 History</button>
-        <button id="btnImport" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📥 Import</button>
-        <button id="btnExport" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">📤 Export</button>
-        <button id="btnShare" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">🔗 Share</button>
-        <input id="fileImport" type="file" accept="application/json,.json,.lrc,.txt" class="hidden" />
-      </div>
-    </header>
+<body class="p-4">
 
-    <section class="mt-6">
-      <input id="youtubeInput" placeholder="Paste YouTube URL here" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none" />
-      <div class="flex gap-2 mt-2">
-        <button onclick="addYouTubeToPlaylist()" class="px-4 py-2 rounded-xl bg-red-600 text-white">Add to Queue</button>
-        <button id="btnPasteLRC" class="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Import LRC to Lyrics</button>
-      </div>
-    </section>
+  <h1 class="text-3xl font-bold">Velkzie Music Player</h1>
 
-    <section class="mt-6 p-4 rounded-3xl bg-neutral-900/70 border border-neutral-800 shadow-xl backdrop-blur">
-      <div class="flex items-center gap-4">
-        <img id="coverArt" alt="Cover" class="w-24 h-24 rounded-2xl object-cover bg-neutral-800" />
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-3">
-            <div id="nowTitle" class="text-xl font-bold truncate flex-1">—</div>
-            <button id="btnFavToggle" class="pill">⭐</button>
-          </div>
-          <div class="text-sm text-neutral-400 mt-1" id="nowInfo">—</div>
-        </div>
-      </div>
-      <div class="mt-4 flex items-center gap-2 flex-wrap">
-        <button id="btnPrev" class="btn-control">⏮️</button>
-        <button id="btnPlay" class="btn-control">▶</button>
-        <button id="btnNext" class="btn-control">⏭️</button>
-        <button id="btnShuffle" class="btn-control">🔀</button>
-        <button id="btnRepeat" class="btn-control">🔁</button>
-      </div>
-      <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div><label class="text-sm text-neutral-400">Volume</label><input id="vol" type="range" min="0" max="100" value="100" class="w-full" /></div>
-        <div><label class="text-sm text-neutral-400">Speed</label><input id="speed" type="range" min="0.5" max="2" step="0.1" value="1" class="w-full" /></div>
-        <div class="flex items-end"><button id="resetSpeed" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 w-full">Reset Speed</button></div>
-      </div>
-      <div id="player"></div>
-    </section>
+  <div class="mt-4">
+    <input id="youtubeInput" placeholder="Paste YouTube URL" class="w-full p-2 rounded bg-neutral-900 border border-neutral-800" />
+    <button onclick="addYouTubeToPlaylist()" class="mt-2 px-4 py-2 bg-red-600 rounded">Add to Queue</button>
   </div>
 
-  <!-- Lyrics Panel -->
-  <div id="lyricsPanel">
-    <div class="flex gap-2 mb-3">
-      <button id="tabSynced" class="pill">⏱️ Synced</button>
-      <button id="tabPlain" class="pill">📄 Static</button>
-      <button id="btnTranslateLyrics" class="pill">🌐 Translate</button>
-      <button id="btnClearLyrics" class="pill ml-auto">🧹 Clear</button>
-    </div>
-    <div id="lyricsSynced"></div>
-    <div id="lyricsPlain" class="hidden"></div>
+  <div class="mt-4 flex gap-2">
+    <button id="btnPrev" class="btn-control">⏮️</button>
+    <button id="btnPlay" class="btn-control">▶</button>
+    <button id="btnNext" class="btn-control">⏭️</button>
+    <button id="btnShuffle" class="btn-control">🔀</button>
+    <button id="btnRepeat" class="btn-control">🔁</button>
   </div>
 
-  <!-- Queue Panel -->
-  <div id="queuePanel"></div>
-
-  <!-- History Modal -->
-  <div id="modalHistory" class="modal">
-    <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 w-[min(92vw,720px)]">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-xl font-bold">📜 Play History</h3>
-        <button class="pill" onclick="closeModal('modalHistory')">Close</button>
-      </div>
-      <div id="historyList" class="space-y-2"></div>
-    </div>
-  </div>
-
-  <!-- Faves & Stats Modals omitted for brevity (keep your originals) -->
+  <div id="player"></div>
 
   <script>
-    // ==== STATE ====
-    let playlist = JSON.parse(localStorage.getItem('velkziePlaylist') || '[]');
-    let shuffle = JSON.parse(localStorage.getItem('velkzieShuffle') || 'false');
-    let repeat = JSON.parse(localStorage.getItem('velkzieRepeat') || 'false');
-    let favorites = JSON.parse(localStorage.getItem('velkzieFaves') || '[]');
-    let stats = JSON.parse(localStorage.getItem('velkzieStats') || '{"plays":{},"time":0}');
-    let history = JSON.parse(localStorage.getItem('velkzieHistory') || '[]');
+    // === State ===
+    let playlist = [];
     let current = 0;
-    let ytPlayer, ytReady = false;
+    let ytPlayer, ytReady=false;
+    let shuffle=false, repeat=false;
 
-    function saveState(){
-      localStorage.setItem('velkziePlaylist', JSON.stringify(playlist));
-      localStorage.setItem('velkzieShuffle', JSON.stringify(shuffle));
-      localStorage.setItem('velkzieRepeat', JSON.stringify(repeat));
-      localStorage.setItem('velkzieFaves', JSON.stringify(favorites));
-      localStorage.setItem('velkzieStats', JSON.stringify(stats));
-      localStorage.setItem('velkzieHistory', JSON.stringify(history));
-    }
-
-    // ==== YOUTUBE PLAYER ====
-    function onYouTubeIframeAPIReady() {
-      ytPlayer = new YT.Player('player', {
-        videoId: '',
-        playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0 },
-        events: { onReady: () => ytReady = true }
+    // === YouTube API Init ===
+    function onYouTubeIframeAPIReady(){
+      ytPlayer = new YT.Player('player',{
+        videoId:'',
+        playerVars:{autoplay:0,controls:1,modestbranding:1,rel:0},
+        events:{
+          onReady:()=>ytReady=true,
+          onStateChange:(e)=>{
+            if(e.data===0){ // ended
+              if(repeat) playTrack(current);
+              else nextTrack();
+            }
+          }
+        }
       });
     }
 
-    // ==== YOUTUBE URL PARSING ====
-    function getYouTubeId(url) {
-      try {
-        const u = new URL(url);
-        if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-        if (u.searchParams.get("v")) return u.searchParams.get("v");
-      } catch {}
+    // === Helpers ===
+    function getYouTubeId(url){
+      try{
+        const u=new URL(url);
+        if(u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+        if(u.searchParams.get("v")) return u.searchParams.get("v");
+      }catch{}
       return null;
     }
 
+    // === Add to Queue ===
     async function addYouTubeToPlaylist(){
-      const url = document.getElementById('youtubeInput').value.trim();
-      const id = getYouTubeId(url);
-      if (!id) return alert("Invalid YouTube URL");
-      try {
-        const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
-        const data = await res.json();
-        const track = { type:'youtube', id, title:data.title, url:`https://www.youtube.com/watch?v=${id}`, cover:data.thumbnail_url };
-        playlist.push(track);
-        saveState();
-        renderQueue();
-        if (playlist.length === 1) playTrack(0);
-      } catch(err){ alert("Could not load YouTube track"); }
-    }
-
-    // ==== PLAYBACK ====
-    function playTrack(i){
-      current = i;
-      const t = playlist[i];
-      document.getElementById('nowTitle').textContent = t.title;
-      document.getElementById('coverArt').src = t.cover;
-      document.getElementById('nowInfo').textContent = `YouTube • ${t.id}`;
-      saveHistory(t);
-
-      if(t.type==='youtube' && ytReady){
-        ytPlayer.loadVideoById(t.id);
-        ytPlayer.playVideo();
-      }
-      saveState();
-    }
-
-    function nextTrack(){ shuffle ? playTrack(Math.floor(Math.random()*playlist.length)) : playTrack((current+1)%playlist.length); }
-    function prevTrack(){ playTrack((current-1+playlist.length)%playlist.length); }
-
-    // ==== HISTORY ====
-    function saveHistory(track){
-      history.unshift({ id:track.id, title:track.title, cover:track.cover, url:track.url, time:new Date().toLocaleString() });
-      history = history.slice(0,50);
-      saveState();
-    }
-    function openHistory(){
-      const list=document.getElementById('historyList');
-      list.innerHTML='';
-      if(!history.length){ list.innerHTML='<div class="text-neutral-400">No history yet.</div>'; return; }
-      history.forEach(h=>{
-        list.innerHTML += `<div class="flex items-center gap-3 p-2 rounded-xl bg-neutral-800">
-          <img src="${h.cover}" class="w-12 h-12 rounded-lg object-cover"/>
-          <div class="flex-1 min-w-0"><div class="truncate font-semibold">${h.title}</div>
-          <div class="text-xs text-neutral-400">${h.time}</div></div>
-        </div>`;
-      });
-      openModal('modalHistory');
-    }
-    document.getElementById('btnHistory').addEventListener('click', openHistory);
-
-    // ==== MODALS ====
-    function openModal(id){ document.getElementById(id).classList.add('open'); }
-    function closeModal(id){ document.getElementById(id).classList.remove('open'); }
-
-    // ==== BUTTONS ====
-    document.getElementById('btnPlay').addEventListener('click', ()=> ytPlayer.getPlayerState()===1 ? ytPlayer.pauseVideo() : ytPlayer.playVideo());
-    document.getElementById('btnNext').addEventListener('click', nextTrack);
-    document.getElementById('btnPrev').addEventListener('click', prevTrack);
-    document.getElementById('btnQueue').addEventListener('click', ()=> document.getElementById('queuePanel').classList.toggle('open'));
-    document.getElementById('btnLyrics').addEventListener('click', ()=> document.getElementById('lyricsPanel').classList.toggle('open'));
-
-    // ==== TRANSLATE LYRICS ====
-    document.getElementById('btnTranslateLyrics').addEventListener('click', async ()=>{
-      const text=[...document.getElementById('lyricsPlain').querySelectorAll('.lyric-line')].map(el=>el.textContent).join("\n");
-      if(!text.trim()) return alert("No lyrics to translate!");
+      const url=document.getElementById('youtubeInput').value.trim();
+      const id=getYouTubeId(url);
+      if(!id) return alert("Invalid YouTube URL");
       try{
-        const res=await fetch("https://libretranslate.de/translate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ q:text, source:"auto", target:"en" })});
+        const res=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
         const data=await res.json();
-        document.getElementById('lyricsPlain').innerHTML = data.translatedText.split("\n").map(l=>`<div class="lyric-line">${l}</div>`).join("");
-      }catch(e){ alert("Translation failed"); }
-    });
-
-    // ==== QUEUE RENDER ====
-    function renderQueue(){
-      const panel=document.getElementById('queuePanel');
-      panel.innerHTML='<h2 class="font-bold mb-3">Queue</h2>';
-      playlist.forEach((t,i)=>{
-        panel.innerHTML += `<div class="flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 mb-1">
-          <div class="min-w-0 flex-1 truncate">${i===current?'<span class="text-purple-400 mr-2">►</span>':''}${t.title}</div>
-          <button class="pill" onclick="playTrack(${i})">▶</button>
-        </div>`;
-      });
+        const track={id,title:data.title,url:`https://youtu.be/${id}`,cover:data.thumbnail_url};
+        playlist.push(track);
+        if(playlist.length===1) playTrack(0);
+        alert("Added: "+track.title);
+      }catch(err){alert("Could not load video");}
     }
-    renderQueue();
+
+    // === Playback ===
+    function playTrack(i){
+      current=i;
+      const t=playlist[i];
+      if(ytReady) ytPlayer.loadVideoById(t.id);
+      document.getElementById('btnPlay').textContent='⏸';
+    }
+    function nextTrack(){ if(!playlist.length)return; shuffle? playTrack(Math.floor(Math.random()*playlist.length)) : playTrack((current+1)%playlist.length); }
+    function prevTrack(){ if(!playlist.length)return; playTrack((current-1+playlist.length)%playlist.length); }
+
+    // === Button Events ===
+    document.getElementById('btnPlay').addEventListener('click',()=>{
+      if(!ytReady)return;
+      const st=ytPlayer.getPlayerState();
+      if(st===1){ ytPlayer.pauseVideo(); document.getElementById('btnPlay').textContent='▶'; }
+      else{ ytPlayer.playVideo(); document.getElementById('btnPlay').textContent='⏸'; }
+    });
+    document.getElementById('btnNext').addEventListener('click',nextTrack);
+    document.getElementById('btnPrev').addEventListener('click',prevTrack);
+    document.getElementById('btnShuffle').addEventListener('click',()=>shuffle=!shuffle);
+    document.getElementById('btnRepeat').addEventListener('click',()=>repeat=!repeat);
   </script>
 </body>
 </html>
