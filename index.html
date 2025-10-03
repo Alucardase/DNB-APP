@@ -9,7 +9,6 @@
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
-    audio::-webkit-media-controls { display:none !important; }
   </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 min-h-screen">
@@ -29,7 +28,9 @@
 
     <!-- YouTube Player -->
     <div id="ytContainer" class="mt-4 hidden">
-      <div id="player"></div>
+      <img id="ytThumbnail" class="w-40 h-40 rounded-xl object-cover mb-2" />
+      <div id="ytTitle" class="font-bold"></div>
+      <div id="player" class="mt-2"></div>
     </div>
 
     <!-- Audio Player Card -->
@@ -73,12 +74,24 @@
       });
     }
 
-    function loadYouTube() {
+    async function loadYouTube() {
       const url = document.getElementById("youtubeInput").value;
-      const id = url.includes("v=") ? url.split("v=")[1].split("&")[0] : url.split("youtu.be/")[1];
+      let id = null;
+      if (url.includes("v=")) id = url.split("v=")[1].split("&")[0];
+      else if (url.includes("youtu.be/")) id = url.split("youtu.be/")[1].split("?")[0];
       if (id) {
         document.getElementById("ytContainer").classList.remove("hidden");
         ytPlayer.loadVideoById(id);
+
+        // Get YouTube video info via oEmbed
+        try {
+          const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
+          const data = await res.json();
+          document.getElementById("ytTitle").textContent = data.title;
+          document.getElementById("ytThumbnail").src = data.thumbnail_url;
+        } catch (err) {
+          document.getElementById("ytTitle").textContent = "YouTube Track";
+        }
       }
     }
 
@@ -115,7 +128,7 @@
       listEl.innerHTML = '';
       DEFAULT_TRACKS.forEach((t, i) => {
         const li = document.createElement('li');
-        li.innerHTML = `<button onclick="playTrack(${i})" class="w-full text-left px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800">${t.title} — ${t.artist}</button>`;
+        li.innerHTML = `<button onclick=\"playTrack(${i})\" class=\"w-full text-left px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800\">${t.title} — ${t.artist}</button>`;
         listEl.appendChild(li);
       });
     }
