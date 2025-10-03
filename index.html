@@ -6,7 +6,6 @@
   <title>Velkzie Drum & Bass — Web Player</title>
   <meta name="description" content="Music Player app" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
     body, html { margin: 0; padding: 0; overflow: hidden; }
@@ -90,7 +89,8 @@
         <button id="resetSpeed" class="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 mt-1">Reset Speed</button>
       </div>
 
-      <div id="player"></div>
+      <!-- Real Audio Element -->
+      <audio id="audio" crossorigin="anonymous"></audio>
     </section>
   </div>
 
@@ -103,6 +103,44 @@
     let repeat = JSON.parse(localStorage.getItem('velkzieRepeat') || 'false');
     let current = 0;
 
+    const audio = document.getElementById("audio");
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    const source = ctx.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+    let dataArray = new Uint8Array(analyser.fftSize);
+
+    const canvas=document.getElementById('bgViz');
+    const cctx=canvas.getContext('2d');
+    function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+    window.addEventListener('resize',resize); resize();
+
+    function draw(){
+      requestAnimationFrame(draw);
+      analyser.getByteTimeDomainData(dataArray);
+
+      cctx.fillStyle='rgba(0,0,0,0.15)';
+      cctx.fillRect(0,0,canvas.width,canvas.height);
+
+      cctx.beginPath();
+      let sliceWidth=canvas.width/dataArray.length, x=0;
+      for(let i=0;i<dataArray.length;i++){
+        let v=dataArray[i]/128.0, y=v*canvas.height/2;
+        i===0?cctx.moveTo(x,y):cctx.lineTo(x,y);
+        x+=sliceWidth;
+      }
+      cctx.lineTo(canvas.width,canvas.height/2);
+
+      // Neon glow
+      cctx.shadowBlur=20; cctx.shadowColor='#a855f7';
+      cctx.strokeStyle='#c084fc'; cctx.lineWidth=3; cctx.stroke();
+      cctx.shadowBlur=0; cctx.strokeStyle='#fff'; cctx.lineWidth=1; cctx.stroke();
+    }
+    draw();
+
+    // Controls
     const btnPlay = document.getElementById('btnPlay');
     const btnPrev = document.getElementById('btnPrev');
     const btnNext = document.getElementById('btnNext');
@@ -123,18 +161,6 @@
       localStorage.setItem('velkziePlaylist', JSON.stringify(playlist));
       localStorage.setItem('velkzieShuffle', JSON.stringify(shuffle));
       localStorage.setItem('velkzieRepeat', JSON.stringify(repeat));
-    }
-
-    // ======= YouTube Integration =======
-    let ytPlayer;
-    function onYouTubeIframeAPIReady() {
-      ytPlayer = new YT.Player('player', {
-        height: '200', width: '320', videoId: '', playerVars: {autoplay:0,controls:1, enablejsapi:1, origin: window.location.origin},
-        events:{ 
-          onReady: () => connectYoutubeAudio(),
-          onStateChange: (e)=>{ if(e.data===0) nextTrack(); }
-        }
-      });
     }
 
     async function addYouTubeToPlaylist(){
@@ -177,9 +203,8 @@
       const t=playlist[i];
       nowTitle.textContent=t.title;
       coverArt.src=t.cover;
-      if(t.type==='youtube'){
-        ytPlayer.loadVideoById(t.id);
-      }
+      audio.src = `http://localhost:3000/stream?url=${encodeURIComponent(t.url)}`;
+      audio.play();
       btnPlay.textContent='⏸';
       saveState();
       loadLyrics(t.title);
@@ -188,23 +213,23 @@
     function nextTrack(){ shuffle? current=Math.floor(Math.random()*playlist.length): current=(current+1)%playlist.length; playTrack(current); }
     function prevTrack(){ current=(current-1+playlist.length)%playlist.length; playTrack(current); }
 
-    btnPlay.addEventListener('click',()=>{ ytPlayer.getPlayerState()===1?ytPlayer.pauseVideo():ytPlayer.playVideo(); });
+    btnPlay.addEventListener('click',()=>{ audio.paused?audio.play():audio.pause(); });
     btnNext.addEventListener('click',()=>nextTrack());
     btnPrev.addEventListener('click',()=>prevTrack());
     btnShuffle.addEventListener('click',()=>{ shuffle=!shuffle; btnShuffle.classList.toggle('ring-2',shuffle); saveState(); });
     btnRepeat.addEventListener('click',()=>{ repeat=!repeat; btnRepeat.classList.toggle('ring-2',repeat); saveState(); });
 
     // Volume & Speed Controls
-    vol.addEventListener('input',()=>{ ytPlayer.setVolume(vol.value); });
-    speed.addEventListener('input',()=>{ ytPlayer.setPlaybackRate(parseFloat(speed.value)); });
-    resetSpeed.addEventListener('click',()=>{ speed.value=1; ytPlayer.setPlaybackRate(1); });
+    vol.addEventListener('input',()=>{ audio.volume=vol.value/100; });
+    speed.addEventListener('input',()=>{ audio.playbackRate=parseFloat(speed.value); });
+    resetSpeed.addEventListener('click',()=>{ audio.playbackRate=1; speed.value=1; });
 
     // ======= Lyrics =======
     async function loadLyrics(title){
       try{
         const res=await fetch(`https://api.lyrics.ovh/v1/unknown/${encodeURIComponent(title)}`);
         const data=await res.json();
-        const lyrics=data.lyrics?data.lyrics.split('\n'):["No lyrics found."];
+        const lyrics=data.lyrics?data.lyrics.split('\\n'):["No lyrics found."];
         lyricsPanel.innerHTML=lyrics.map((line,idx)=>`<div class='lyric-line'>${line}</div>`).join('');
       }catch(err){ lyricsPanel.innerHTML='<div>No lyrics found.</div>'; }
     }
@@ -225,64 +250,6 @@
     }
 
     renderQueue();
-
-    // ======= Visualizer =======
-    const canvas=document.getElementById('bgViz');
-    const ctx=canvas.getContext('2d');
-    const AudioCtx=window.AudioContext||window.webkitAudioContext;
-    const actx=new AudioCtx();
-    const analyser=actx.createAnalyser(); analyser.fftSize=2048;
-    const bufferLength=analyser.fftSize; const dataArray=new Uint8Array(bufferLength);
-
-    function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
-    window.addEventListener('resize',resize); resize();
-
-    function connectYoutubeAudio(){
-      const iframe=ytPlayer.getIframe();
-      try{
-        const source=actx.createMediaElementSource(iframe);
-        source.connect(analyser);
-        analyser.connect(actx.destination);
-      }catch(e){ console.warn("Could not connect YouTube audio to analyser",e); }
-    }
-
-    function draw(){
-      requestAnimationFrame(draw);
-      analyser.getByteTimeDomainData(dataArray);
-
-      // trailing effect
-      ctx.fillStyle='rgba(0, 0, 0, 0.15)';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-
-      const sliceWidth=canvas.width/bufferLength;
-      let x=0;
-
-      ctx.beginPath();
-      for(let i=0;i<bufferLength;i++){
-        const v=dataArray[i]/128.0;
-        const y=v*canvas.height/2;
-        if(i===0) ctx.moveTo(x,y);
-        else ctx.lineTo(x,y);
-        x+=sliceWidth;
-      }
-      ctx.lineTo(canvas.width,canvas.height/2);
-
-      // Neon glow
-      ctx.shadowBlur=20;
-      ctx.shadowColor='#a855f7';
-      ctx.strokeStyle='#c084fc';
-      ctx.lineWidth=3;
-      ctx.stroke();
-
-      // Inner bright line
-      ctx.shadowBlur=0;
-      ctx.strokeStyle='#ffffff';
-      ctx.lineWidth=1;
-      ctx.stroke();
-    }
-    draw();
-
-    window.addEventListener('click',()=>{ actx.resume(); },{once:true});
   </script>
 </body>
 </html>
