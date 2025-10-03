@@ -3,45 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Drum & Bass — Web Player</title>
-  <meta name="description" content="A lightweight Drum & Bass web app branded by Velkzie." />
+  <title>Velkzie Drum & Bass — Web Player</title>
+  <meta name="description" content="A Drum & Bass web app with YouTube + MP3 playlist, shuffle, repeat, and waveform background visualizer." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
+    body, html { margin: 0; padding: 0; overflow: hidden; }
+    canvas#bgViz { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
   </style>
 </head>
-<body class="bg-neutral-950 text-neutral-100 min-h-screen">
-  <div class="max-w-6xl mx-auto p-4 md:p-8">
+<body class="bg-neutral-950 text-neutral-100 min-h-screen relative">
+  <canvas id="bgViz"></canvas>
+  <div class="relative z-10 max-w-6xl mx-auto p-4 md:p-8">
     <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
         <h1 class="text-3xl md:text-4xl font-black tracking-tight">Velkzie Drum & Bass</h1>
-        <p class="text-neutral-400">A self‑hosted DnB + YouTube player — by Velkzie.</p>
+        <p class="text-neutral-400">YouTube + MP3 Player with Visualizer</p>
       </div>
     </header>
 
-    <!-- Input for YouTube -->
     <section class="mt-6">
       <input id="youtubeInput" placeholder="Paste YouTube URL here" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none" />
-      <button onclick="loadYouTube()" class="mt-2 px-4 py-2 rounded-xl bg-red-600 text-white">Load YouTube Track</button>
+      <button onclick="addYouTubeToPlaylist()" class="mt-2 px-4 py-2 rounded-xl bg-red-600 text-white">Add YouTube Track</button>
     </section>
 
-    <!-- YouTube Player -->
-    <div id="ytContainer" class="mt-4 hidden">
-      <img id="ytThumbnail" class="w-40 h-40 rounded-xl object-cover mb-2" />
-      <div id="ytTitle" class="font-bold"></div>
-      <div id="player" class="mt-2"></div>
-    </div>
-
-    <!-- Audio Player Card -->
     <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 p-4 rounded-3xl bg-gradient-to-b from-neutral-900 to-neutral-950 border border-neutral-800 shadow-xl">
+      <div class="lg:col-span-2 p-4 rounded-3xl bg-neutral-900/70 border border-neutral-800 shadow-xl backdrop-blur">
         <div class="flex items-center gap-4">
           <img id="coverArt" alt="Cover" class="w-24 h-24 rounded-2xl object-cover bg-neutral-800" />
           <div class="min-w-0">
             <div id="nowTitle" class="text-xl font-bold truncate">—</div>
             <div id="nowArtist" class="text-neutral-400 truncate">—</div>
-            <div id="nowMeta" class="text-neutral-500 text-sm">BPM — • Tags —</div>
           </div>
         </div>
 
@@ -49,13 +42,16 @@
           <button id="btnPrev" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏮️</button>
           <button id="btnPlay" class="px-6 py-3 rounded-2xl bg-neutral-100 text-neutral-900 font-semibold">▶</button>
           <button id="btnNext" class="px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800">⏭️</button>
-          <input id="vol" type="range" min="0" max="1" step="0.01" value="1" class="w-32" title="Volume" />
+          <button id="btnShuffle" class="ml-2 px-3 py-2 rounded-2xl bg-neutral-900 border border-neutral-800">🔀</button>
+          <button id="btnRepeat" class="px-3 py-2 rounded-2xl bg-neutral-900 border border-neutral-800">🔁</button>
+          <input id="vol" type="range" min="0" max="1" step="0.01" value="1" class="ml-auto w-32" title="Volume" />
         </div>
 
-        <audio id="audio" crossorigin="anonymous" controls></audio>
+        <audio id="audio" crossorigin="anonymous" controls class="hidden"></audio>
+        <div id="player" class="hidden"></div>
       </div>
 
-      <aside class="lg:col-span-1 p-4 rounded-3xl bg-neutral-950 border border-neutral-800">
+      <aside class="lg:col-span-1 p-4 rounded-3xl bg-neutral-900/70 border border-neutral-800 backdrop-blur">
         <h2 class="font-bold mb-2">Playlist</h2>
         <ul id="list" class="space-y-1 max-h-[520px] overflow-auto pr-1"></ul>
       </aside>
@@ -63,90 +59,163 @@
   </div>
 
   <script>
+    // ======= State =======
+    let playlist = JSON.parse(localStorage.getItem('velkziePlaylist') || '[]');
+    let shuffle = JSON.parse(localStorage.getItem('velkzieShuffle') || 'false');
+    let repeat = JSON.parse(localStorage.getItem('velkzieRepeat') || 'false');
+    let current = 0;
+
+    const audio = document.getElementById('audio');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnShuffle = document.getElementById('btnShuffle');
+    const btnRepeat = document.getElementById('btnRepeat');
+    const vol = document.getElementById('vol');
+    const listEl = document.getElementById('list');
+    const coverArt = document.getElementById('coverArt');
+    const nowTitle = document.getElementById('nowTitle');
+    const nowArtist = document.getElementById('nowArtist');
+
+    // Default tracks
+    if (playlist.length === 0) {
+      playlist = [
+        {type:'mp3', title:'Liquid Roller', artist:'DJ Placeholder', url:'tracks/liquid-roller.mp3', cover:'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200'},
+        {type:'mp3', title:'Neurofunk Ripper', artist:'Producer X', url:'tracks/neurofunk-ripper.mp3', cover:'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200'}
+      ];
+    }
+
+    function saveState(){
+      localStorage.setItem('velkziePlaylist', JSON.stringify(playlist));
+      localStorage.setItem('velkzieShuffle', JSON.stringify(shuffle));
+      localStorage.setItem('velkzieRepeat', JSON.stringify(repeat));
+    }
+
     // ======= YouTube Integration =======
     let ytPlayer;
     function onYouTubeIframeAPIReady() {
       ytPlayer = new YT.Player('player', {
-        height: '200',
-        width: '320',
-        videoId: '',
-        playerVars: { 'autoplay': 1, 'controls': 1 }
+        height: '200', width: '320', videoId: '', playerVars: {autoplay:0,controls:1},
+        events:{ onStateChange: (e)=>{ if(e.data===0) nextTrack(); } }
       });
     }
 
-    async function loadYouTube() {
-      const url = document.getElementById("youtubeInput").value;
-      let id = null;
-      if (url.includes("v=")) id = url.split("v=")[1].split("&")[0];
-      else if (url.includes("youtu.be/")) id = url.split("youtu.be/")[1].split("?")[0];
-      if (id) {
-        document.getElementById("ytContainer").classList.remove("hidden");
-        ytPlayer.loadVideoById(id);
-
-        // Get YouTube video info via oEmbed
-        try {
-          const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
-          const data = await res.json();
-          document.getElementById("ytTitle").textContent = data.title;
-          document.getElementById("ytThumbnail").src = data.thumbnail_url;
-        } catch (err) {
-          document.getElementById("ytTitle").textContent = "YouTube Track";
-        }
+    async function addYouTubeToPlaylist(){
+      const url = document.getElementById('youtubeInput').value;
+      let id=null;
+      if(url.includes('v=')) id=url.split('v=')[1].split('&')[0];
+      else if(url.includes('youtu.be/')) id=url.split('youtu.be/')[1].split('?')[0];
+      if(id){
+        try{
+          const res=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
+          const data=await res.json();
+          playlist.push({type:'youtube', id, title:data.title, artist:'YouTube', url:`https://www.youtube.com/watch?v=${id}`, cover:data.thumbnail_url});
+          saveState();
+          renderList();
+        }catch(err){ alert('Could not load YouTube track'); }
       }
     }
 
-    // ======= Sample Local Tracks =======
-    const DEFAULT_TRACKS = [
-      {
-        id: crypto.randomUUID(),
-        title: "Liquid Roller",
-        artist: "DJ Placeholder",
-        url: "tracks/liquid-roller.mp3",
-        cover: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200",
-        bpm: 174,
-        tags: ["liquid", "roller"]
-      },
-      {
-        id: crypto.randomUUID(),
-        title: "Neurofunk Ripper",
-        artist: "Producer X",
-        url: "tracks/neurofunk-ripper.mp3",
-        cover: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200",
-        bpm: 172,
-        tags: ["neuro", "dark"]
-      }
-    ];
-
-    const audio = document.getElementById('audio');
-    const btnPlay = document.getElementById('btnPlay');
-    const vol = document.getElementById('vol');
-    const listEl = document.getElementById('list');
-
-    let current = 0;
-
-    function renderList() {
-      listEl.innerHTML = '';
-      DEFAULT_TRACKS.forEach((t, i) => {
-        const li = document.createElement('li');
-        li.innerHTML = `<button onclick=\"playTrack(${i})\" class=\"w-full text-left px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800\">${t.title} — ${t.artist}</button>`;
+    // ======= Playlist Rendering =======
+    function renderList(){
+      listEl.innerHTML='';
+      playlist.forEach((t,i)=>{
+        const li=document.createElement('li');
+        li.className='flex items-center justify-between px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800';
+        li.innerHTML=`<span>${t.title} — ${t.artist}</span><div class='flex gap-2'><button onclick='playTrack(${i})'>▶</button><button onclick='removeTrack(${i})'>❌</button></div>`;
         listEl.appendChild(li);
       });
     }
 
-    function playTrack(i) {
-      current = i;
-      audio.src = DEFAULT_TRACKS[i].url;
-      audio.play();
-      btnPlay.textContent = '⏸';
+    function removeTrack(i){
+      playlist.splice(i,1);
+      saveState();
+      renderList();
     }
 
-    btnPlay.addEventListener('click', () => {
-      if (audio.paused) { audio.play(); btnPlay.textContent = '⏸'; } else { audio.pause(); btnPlay.textContent = '▶'; }
+    // ======= Playback =======
+    function playTrack(i){
+      current=i;
+      const t=playlist[i];
+      nowTitle.textContent=t.title;
+      nowArtist.textContent=t.artist;
+      coverArt.src=t.cover;
+      if(t.type==='mp3'){
+        document.getElementById('player').classList.add('hidden');
+        audio.classList.remove('hidden');
+        audio.src=t.url;
+        audio.play();
+      }else if(t.type==='youtube'){
+        audio.classList.add('hidden');
+        document.getElementById('player').classList.remove('hidden');
+        ytPlayer.loadVideoById(t.id);
+      }
+      btnPlay.textContent='⏸';
+      saveState();
+    }
+
+    function nextTrack(){
+      if(shuffle){ current=Math.floor(Math.random()*playlist.length); }
+      else{ current=(current+1)%playlist.length; }
+      playTrack(current);
+    }
+    function prevTrack(){ current=(current-1+playlist.length)%playlist.length; playTrack(current); }
+
+    btnPlay.addEventListener('click',()=>{
+      if(audio.classList.contains('hidden')){ ytPlayer.getPlayerState()===1?ytPlayer.pauseVideo():ytPlayer.playVideo(); }
+      else{ if(audio.paused){ audio.play(); btnPlay.textContent='⏸'; } else { audio.pause(); btnPlay.textContent='▶'; } }
     });
 
-    vol.addEventListener('input', () => { audio.volume = Number(vol.value); });
+    btnNext.addEventListener('click',()=>nextTrack());
+    btnPrev.addEventListener('click',()=>prevTrack());
+    btnShuffle.addEventListener('click',()=>{ shuffle=!shuffle; btnShuffle.classList.toggle('ring-2',shuffle); saveState(); });
+    btnRepeat.addEventListener('click',()=>{ repeat=!repeat; btnRepeat.classList.toggle('ring-2',repeat); saveState(); });
+
+    audio.addEventListener('ended',()=>{ repeat?playTrack(current):nextTrack(); });
+    vol.addEventListener('input',()=>{ audio.volume=Number(vol.value); });
 
     renderList();
+
+    // ======= Visualizer (Waveform Background) =======
+    const canvas=document.getElementById('bgViz');
+    const ctx=canvas.getContext('2d');
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    const actx=new AudioCtx();
+    const analyser=actx.createAnalyser();
+    analyser.fftSize=2048;
+    const src=actx.createMediaElementSource(audio);
+    src.connect(analyser);
+    analyser.connect(actx.destination);
+
+    const bufferLength=analyser.fftSize;
+    const dataArray=new Uint8Array(bufferLength);
+
+    function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+    window.addEventListener('resize',resize); resize();
+
+    function draw(){
+      requestAnimationFrame(draw);
+      analyser.getByteTimeDomainData(dataArray);
+      ctx.fillStyle='#000';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.lineWidth=2;
+      ctx.strokeStyle='#0ff';
+      ctx.beginPath();
+      const sliceWidth=canvas.width/bufferLength;
+      let x=0;
+      for(let i=0;i<bufferLength;i++){
+        const v=dataArray[i]/128.0;
+        const y=v*canvas.height/2;
+        if(i===0){ ctx.moveTo(x,y); } else { ctx.lineTo(x,y); }
+        x+=sliceWidth;
+      }
+      ctx.lineTo(canvas.width,canvas.height/2);
+      ctx.stroke();
+    }
+    draw();
+
+    // Unlock audio
+    window.addEventListener('click',()=>{ actx.resume(); },{once:true});
   </script>
 </body>
 </html>
