@@ -32,4 +32,4 @@ app.post("/update", (req, res) => {
 });
 
 app.listen(PORT, () => console.log("RPC server listening on", PORT));
-client.login({ clientId: "YOUR_DISCORD_APP_CLIENT_ID" });
+client.login({ clientId: "849661451190534154" });
