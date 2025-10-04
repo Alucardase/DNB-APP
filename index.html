@@ -6,7 +6,6 @@
   <title>Velkzie Music Player</title>
   <meta name="description" content="Music Player App" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- YouTube IFrame API -->
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
@@ -23,26 +22,24 @@
     .btn-control:hover { box-shadow: 0 0 15px rgba(168,85,247,.8); transform: scale(1.05); }
     @keyframes gradientMove { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-    /* Panels */
+    #lyricsPanel, #queuePanel {
+      position: fixed; top: 0; height: 100%;
+      width: 380px; overflow-y: auto; padding: 1rem;
+      transition: 0.4s ease; z-index: 20;
+    }
     #lyricsPanel {
-      position: fixed; top: 0; right: -420px; width: 380px; height: 100%;
-      background: rgba(20,20,30,0.95); border-left: 2px solid #4b0082;
-      overflow-y: auto; padding: 1rem; transition: right .4s ease; z-index: 20;
+      right: -420px; background: rgba(20,20,30,0.95); border-left: 2px solid #4b0082;
     }
     #lyricsPanel.open { right: 0; }
     #queuePanel {
-      position: fixed; top: 0; left: -420px; width: 380px; height: 100%;
-      background: rgba(20,20,20,0.95); border-right: 2px solid #333;
-      overflow-y: auto; padding: 1rem; transition: left .4s ease; z-index: 20;
+      left: -420px; background: rgba(20,20,20,0.95); border-right: 2px solid #333;
     }
     #queuePanel.open { left: 0; }
 
     .queue-item {
       background: rgba(255,255,255,0.05);
-      padding: .5rem .75rem;
-      border-radius: .5rem;
-      margin-bottom: .5rem;
-      cursor: pointer;
+      padding: .5rem .75rem; border-radius: .5rem;
+      margin-bottom: .5rem; cursor: pointer;
       transition: background .18s, transform .12s, box-shadow .18s;
     }
     .queue-item:hover { background: rgba(255,255,255,0.12); }
@@ -54,18 +51,12 @@
     .pill { padding: .35rem .6rem; border-radius: .75rem; background: #1f1f23; }
     .pill:hover { background:#2a2a30; }
 
-    /* Floating YouTube Player */
     #player {
-      position: fixed;
-      top: 50%;
-      left: 20px;
+      position: fixed; top: 50%; left: 20px;
       transform: translateY(-50%);
-      width: 240px;
-      height: 135px;
-      border-radius: 0.75rem;
-      overflow: hidden;
-      background: #000;
-      z-index: 100;
+      width: 240px; height: 135px;
+      border-radius: .75rem; overflow: hidden;
+      background: #000; z-index: 100;
     }
     #player.hidden { display: none; }
     #player iframe { width: 100%; height: 100%; }
@@ -135,311 +126,149 @@
     </section>
   </div>
 
-  <!-- Floating Video Player -->
   <div id="player"></div>
 
-  <!-- Panels -->
-  <div id="lyricsPanel">
-    <h2 class="text-2xl font-bold mb-4">Lyrics</h2>
-    <p class="text-neutral-400">No lyrics loaded yet.</p>
-  </div>
-  <div id="queuePanel">
-    <h2 class="text-2xl font-bold mb-4">Queue</h2>
-    <p id="emptyQueueMsg" class="text-neutral-400">Your queue is empty.</p>
-    <div id="queueList" class="text-neutral-300 mt-2"></div>
-  </div>
+  <div id="lyricsPanel"><h2 class="text-2xl font-bold mb-4">Lyrics</h2><p class="text-neutral-400">No lyrics loaded yet.</p></div>
+  <div id="queuePanel"><h2 class="text-2xl font-bold mb-4">Queue</h2><p id="emptyQueueMsg" class="text-neutral-400">Your queue is empty.</p><div id="queueList" class="text-neutral-300 mt-2"></div></div>
 
   <script>
-    // ======= STATE =======
-    let player = null;
-    let playerReady = false;
-    let queue = []; // { title, videoId, url }
-    let currentIndex = -1;
-    let isPlaying = false;
-    let shuffle = false;
-    let repeat = false;
-    let deferredIndex = null; // play after player ready
+    let player = null, playerReady = false, queue = [], currentIndex = -1, isPlaying = false, shuffle = false, repeat = false, deferredIndex = null;
 
-    // ======= HELPERS =======
-    function $(id){ return document.getElementById(id); }
+    const $ = id => document.getElementById(id);
 
-    // Robust YouTube ID extractor (watch, youtu.be, embed, shorts, /v/, etc.)
     function extractVideoID(input) {
       try {
-        // If user pasted just an ID
         if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
-
         const url = new URL(input);
-        // Standard watch?v=ID
-        const v = url.searchParams.get('v');
+        const v = url.searchParams.get("v");
         if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
-
-        // Shorts /shorts/ID
-        const shorts = url.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
-        if (shorts) return shorts[1];
-
-        // youtu.be/ID, /embed/ID, /v/ID
-        const pathID = url.pathname.match(/(?:\/embed\/|\/v\/|\/)([a-zA-Z0-9_-]{11})/);
-        if (pathID) return pathID[1];
-
+        const s = url.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+        if (s) return s[1];
+        const p = url.pathname.match(/(?:\/embed\/|\/v\/|\/)([a-zA-Z0-9_-]{11})/);
+        if (p) return p[1];
         return null;
-      } catch {
-        // Not a URL, maybe raw ID
-        return /^[a-zA-Z0-9_-]{11}$/.test(input) ? input : null;
-      }
+      } catch { return /^[a-zA-Z0-9_-]{11}$/.test(input) ? input : null; }
     }
 
-    // Safe title fetch with fallback (noembed supports CORS)
     async function fetchTitle(videoId) {
       try {
         const r = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
         const d = await r.json();
         if (d && d.title) return d.title;
-      } catch (_) {}
+      } catch {}
       return `YouTube Video (${videoId})`;
     }
 
     function updateNowPlayingUI(song, index) {
-      $('nowTitle').textContent = song ? song.title : '—';
-      $('nowInfo').textContent = song ? `Playing from queue (${index + 1}/${queue.length})` : '—';
-      $('coverArt').src = song ? `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg` : '';
+      $("nowTitle").textContent = song ? song.title : "—";
+      $("nowInfo").textContent = song ? `Playing from queue (${index + 1}/${queue.length})` : "—";
+      $("coverArt").src = song ? `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg` : "";
     }
 
     function updateQueueUI() {
-      const list = $('queueList');
-      const empty = $('emptyQueueMsg');
+      const list = $("queueList"), empty = $("emptyQueueMsg");
       list.innerHTML = "";
-
-      if (queue.length === 0) {
-        empty.style.display = 'block';
-        return;
-      }
-      empty.style.display = 'none';
-
+      if (!queue.length) return (empty.style.display = "block");
+      empty.style.display = "none";
       queue.forEach((song, idx) => {
-        const item = document.createElement('div');
-        item.className = 'queue-item';
-        if (idx === currentIndex) item.classList.add('active');
-        item.innerHTML = `
-          <div class="font-semibold truncate">${song.title}</div>
-          <div class="text-xs text-neutral-400 truncate">ID: ${song.videoId}</div>
-        `;
-        item.addEventListener('click', () => playVideoAt(idx));
+        const item = document.createElement("div");
+        item.className = "queue-item" + (idx === currentIndex ? " active" : "");
+        item.innerHTML = `<div class='font-semibold truncate'>${song.title}</div><div class='text-xs text-neutral-400 truncate'>ID: ${song.videoId}</div>`;
+        item.onclick = () => playVideoAt(idx);
         list.appendChild(item);
       });
     }
 
     async function addToQueueFromInput() {
-      const input = $('youtubeInput');
-      const raw = input.value.trim();
-      if (!raw) { alert("Please paste a YouTube URL or video ID."); return; }
-
+      const input = $("youtubeInput"), raw = input.value.trim();
+      if (!raw) return alert("Please paste a YouTube URL or ID.");
       const videoId = extractVideoID(raw);
-      if (!videoId) { alert("Couldn't parse that YouTube URL/ID."); return; }
-
+      if (!videoId) return alert("Couldn't parse that YouTube URL/ID.");
       const title = await fetchTitle(videoId);
-      const song = { title, videoId, url: raw };
-      queue.push(song);
+      queue.push({ title, videoId, url: raw });
       updateQueueUI();
       input.value = "";
-
-      if (currentIndex === -1) playVideoAt(0); // auto-start first add
+      if (currentIndex === -1) playVideoAt(0);
     }
 
     function playVideoAt(index) {
       if (!queue[index]) return;
       currentIndex = index;
       const song = queue[index];
-
       updateNowPlayingUI(song, index);
-      updateQueueUI(); // highlight active
+      updateQueueUI();
 
-      // If player isn't ready yet, defer
-      if (!playerReady || !player || typeof player.loadVideoById !== 'function') {
+      if (!playerReady || !player?.loadVideoById) {
         deferredIndex = index;
         return;
       }
 
       player.loadVideoById(song.videoId);
       isPlaying = true;
-      $('btnPlay').textContent = '⏸️';
-      // apply current sliders
-      try { player.setVolume(parseInt($('vol').value, 10)); } catch(_){}
-      try { player.setPlaybackRate(parseFloat($('speed').value)); } catch(_){}
+      $("btnPlay").textContent = "⏸️";
+      try { player.setVolume(+$("vol").value); } catch {}
+      try { player.setPlaybackRate(+$("speed").value); } catch {}
+
+      // ✅ Send data to RPC server with title + duration
+      setTimeout(() => {
+        try {
+          const duration = player.getDuration();
+          fetch("/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: song.title, duration })
+          }).catch(e => console.warn("RPC update failed:", e));
+        } catch (e) {
+          console.warn("Could not send update:", e);
+        }
+      }, 1500);
     }
 
     function playNext() {
-      if (queue.length === 0) return;
-      if (shuffle) {
-        const next = Math.floor(Math.random() * queue.length);
-        playVideoAt(next);
-      } else if (currentIndex < queue.length - 1) {
-        playVideoAt(currentIndex + 1);
-      } else if (repeat) {
-        playVideoAt(0);
-      } else {
-        isPlaying = false;
-        $('btnPlay').textContent = '▶';
-      }
+      if (!queue.length) return;
+      if (shuffle) playVideoAt(Math.floor(Math.random() * queue.length));
+      else if (currentIndex < queue.length - 1) playVideoAt(currentIndex + 1);
+      else if (repeat) playVideoAt(0);
+      else { isPlaying = false; $("btnPlay").textContent = "▶"; }
     }
 
-    function playPrev() {
-      if (currentIndex > 0) playVideoAt(currentIndex - 1);
-    }
+    function playPrev() { if (currentIndex > 0) playVideoAt(currentIndex - 1); }
 
-    // ======= YOUTUBE PLAYER =======
-    window.onYouTubeIframeAPIReady = function() {
-      player = new YT.Player('player', {
-        height: '135',
-        width: '240',
-        videoId: '',
-        playerVars: { playsinline: 1 },
+    window.onYouTubeIframeAPIReady = () => {
+      player = new YT.Player("player", {
+        height: "135", width: "240", playerVars: { playsinline: 1 },
         events: {
-          onReady: () => {
-            playerReady = true;
-            // If something was selected before player was ready, play it now
-            if (deferredIndex !== null) {
-              const idx = deferredIndex;
-              deferredIndex = null;
-              playVideoAt(idx);
-            }
-          },
-          onStateChange: (e) => {
-            if (e.data === YT.PlayerState.ENDED) {
-              if (repeat) player.playVideo(); else playNext();
-            }
-          }
+          onReady: () => { playerReady = true; if (deferredIndex !== null) { const i = deferredIndex; deferredIndex = null; playVideoAt(i); } },
+          onStateChange: e => { if (e.data === YT.PlayerState.ENDED) { if (repeat) player.playVideo(); else playNext(); } }
         }
       });
     };
 
-    // ======= UI WIRING =======
-    // Panels
-    $('btnQueue').addEventListener('click', () => {
-      $('queuePanel').classList.toggle('open');
-      $('lyricsPanel').classList.remove('open');
-    });
-    $('btnLyrics').addEventListener('click', () => {
-      $('lyricsPanel').classList.toggle('open');
-      $('queuePanel').classList.remove('open');
-    });
+    // --- Buttons and UI actions ---
+    $("btnQueue").onclick = () => { $("queuePanel").classList.toggle("open"); $("lyricsPanel").classList.remove("open"); };
+    $("btnLyrics").onclick = () => { $("lyricsPanel").classList.toggle("open"); $("queuePanel").classList.remove("open"); };
+    $("btnAddToQueue").onclick = addToQueueFromInput;
+    $("youtubeInput").onkeydown = e => { if (e.key === "Enter") addToQueueFromInput(); };
 
-    // Add to queue (no inline onclick anymore)
-    $('btnAddToQueue').addEventListener('click', addToQueueFromInput);
-    $('youtubeInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') addToQueueFromInput();
-    });
-
-    // Playback
-    $('btnPlay').addEventListener('click', () => {
+    $("btnPlay").onclick = () => {
       if (!player || currentIndex === -1) return;
-      if (isPlaying) {
-        player.pauseVideo();
-        $('btnPlay').textContent = '▶';
-      } else {
-        player.playVideo();
-        $('btnPlay').textContent = '⏸️';
-      }
+      if (isPlaying) { player.pauseVideo(); $("btnPlay").textContent = "▶"; }
+      else { player.playVideo(); $("btnPlay").textContent = "⏸️"; }
       isPlaying = !isPlaying;
-    });
-    $('btnNext').addEventListener('click', playNext);
-    $('btnPrev').addEventListener('click', playPrev);
+    };
+    $("btnNext").onclick = playNext;
+    $("btnPrev").onclick = playPrev;
+    $("btnShuffle").onclick = () => { shuffle = !shuffle; $("btnShuffle").style.opacity = shuffle ? "1" : "0.6"; };
+    $("btnRepeat").onclick = () => { repeat = !repeat; $("btnRepeat").style.opacity = repeat ? "1" : "0.6"; };
 
-    $('btnShuffle').addEventListener('click', () => {
-      shuffle = !shuffle;
-      $('btnShuffle').style.opacity = shuffle ? '1' : '0.6';
-    });
-    $('btnRepeat').addEventListener('click', () => {
-      repeat = !repeat;
-      $('btnRepeat').style.opacity = repeat ? '1' : '0.6';
-    });
+    $("vol").oninput = () => { if (player && playerReady) player.setVolume(+$("vol").value); };
+    $("speed").oninput = () => { if (player && playerReady) player.setPlaybackRate(+$("speed").value); };
+    $("resetSpeed").onclick = () => { $("speed").value = 1; if (player && playerReady) player.setPlaybackRate(1); };
 
-    // Volume & Speed
-    $('vol').addEventListener('input', () => {
-      try { if (player && playerReady) player.setVolume(parseInt($('vol').value, 10)); } catch(_){}
-    });
-    $('speed').addEventListener('input', () => {
-      try { if (player && playerReady) player.setPlaybackRate(parseFloat($('speed').value)); } catch(_){}
-    });
-    $('resetSpeed').addEventListener('click', () => {
-      $('speed').value = 1;
-      try { if (player && playerReady) player.setPlaybackRate(1); } catch(_){}
-    });
+    $("btnToggleVideo").onclick = () => { const el = $("player"); el.classList.toggle("hidden"); $("btnToggleVideo").textContent = el.classList.contains("hidden") ? "🎥 Show Video" : "🎥 Hide Video"; };
 
-    // Faves (simple toggle for current song)
-    const faves = [];
-    $('btnFavToggle').addEventListener('click', () => {
-      if (currentIndex === -1) return;
-      const id = queue[currentIndex].videoId;
-      const i = faves.indexOf(id);
-      if (i === -1) {
-        faves.push(id);
-        $('btnFavToggle').textContent = '⭐ Faved';
-        $('btnFavToggle').classList.add('bg-yellow-500');
-      } else {
-        faves.splice(i, 1);
-        $('btnFavToggle').textContent = '⭐';
-        $('btnFavToggle').classList.remove('bg-yellow-500');
-      }
-    });
-
-    // Import / Export / Share / Stats / Show-Hide video
-    $('btnImport').addEventListener('click', () => $('fileImport').click());
-    $('fileImport').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const data = JSON.parse(text);
-        if (Array.isArray(data.queue)) {
-          queue = data.queue.filter(x => x && x.videoId);
-          currentIndex = -1;
-          updateQueueUI();
-          $('emptyQueueMsg').style.display = queue.length ? 'none' : 'block';
-          alert('Imported queue from JSON.');
-        } else {
-          alert('Invalid JSON format.');
-        }
-      } catch {
-        alert('Not valid JSON.');
-      }
-      e.target.value = '';
-    });
-
-    $('btnExport').addEventListener('click', () => {
-      const data = JSON.stringify({ queue }, null, 2);
-      const blob = new Blob([data], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "velkzie_music_data.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    $('btnStats').addEventListener('click', () => {
-      alert(`📊 Stats:
-Songs in queue: ${queue.length}
-Current index: ${currentIndex === -1 ? 'none' : currentIndex + 1}
-Shuffle: ${shuffle}
-Repeat: ${repeat}`);
-    });
-
-    $('btnShare').addEventListener('click', async () => {
-      const shareData = { title: "Velkzie Music Player", text: "Check out this player!", url: location.href };
-      try { await navigator.share(shareData); }
-      catch { await navigator.clipboard.writeText(location.href); alert('Link copied to clipboard!'); }
-    });
-
-    $('btnToggleVideo').addEventListener('click', () => {
-      const el = $('player');
-      el.classList.toggle('hidden');
-      $('btnToggleVideo').textContent = el.classList.contains('hidden') ? '🎥 Show Video' : '🎥 Hide Video';
-    });
-
-    // Initial UI paint
-    updateQueueUI();
-    updateNowPlayingUI(null, -1);
+    // Initial UI
+    updateQueueUI(); updateNowPlayingUI(null, -1);
   </script>
 </body>
 </html>
