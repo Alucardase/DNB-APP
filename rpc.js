@@ -32,4 +32,7 @@ app.post("/update", (req, res) => {
 });
 
 app.listen(PORT, () => console.log("RPC server listening on", PORT));
-client.login({ clientId: "849661451190534154" });
+client.login({ clientId: "849661451190534154" }).catch(err => {
+  console.warn("⚠️ Could not connect to Discord RPC:", err.message);
+});
+
