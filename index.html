@@ -6,6 +6,7 @@
   <title>Velkzie Music Player</title>
   <meta name="description" content="Music Player App" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- YouTube IFrame API -->
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     :root { color-scheme: dark; }
@@ -20,11 +21,7 @@
       transition: transform 0.2s, box-shadow 0.2s;
     }
     .btn-control:hover { box-shadow: 0 0 15px rgba(168,85,247,.8); transform: scale(1.05); }
-    @keyframes gradientMove { 
-      0%{background-position:0% 50%} 
-      50%{background-position:100% 50%} 
-      100%{background-position:0% 50%} 
-    }
+    @keyframes gradientMove { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
     /* Panels */
     #lyricsPanel {
@@ -46,9 +43,13 @@
       border-radius: .5rem;
       margin-bottom: .5rem;
       cursor: pointer;
-      transition: background .2s;
+      transition: background .18s, transform .12s, box-shadow .18s;
     }
-    .queue-item:hover { background: rgba(255,255,255,0.15); }
+    .queue-item:hover { background: rgba(255,255,255,0.12); }
+    .queue-item.active {
+      box-shadow: 0 0 0 2px rgba(168,85,247,.6);
+      background: rgba(168,85,247,.08);
+    }
 
     .pill { padding: .35rem .6rem; border-radius: .75rem; background: #1f1f23; }
     .pill:hover { background:#2a2a30; }
@@ -93,7 +94,8 @@
     <section class="mt-6">
       <input id="youtubeInput" placeholder="Paste YouTube URL here" class="w-full px-4 py-3 rounded-2xl bg-neutral-900 border border-neutral-800 outline-none" />
       <div class="flex gap-2 mt-2">
-        <button onclick="addYouTubeToPlaylist()" class="px-4 py-2 rounded-xl bg-red-600 text-white">Add to Queue</button>
+        <button id="btnAddToQueue" class="px-4 py-2 rounded-xl bg-red-600 text-white">Add to Queue</button>
+        <button id="btnPasteLRC" class="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700">Import LRC to Lyrics</button>
       </div>
     </section>
 
@@ -143,101 +145,141 @@
   </div>
   <div id="queuePanel">
     <h2 class="text-2xl font-bold mb-4">Queue</h2>
-    <div id="queueList" class="text-neutral-300"></div>
+    <p id="emptyQueueMsg" class="text-neutral-400">Your queue is empty.</p>
+    <div id="queueList" class="text-neutral-300 mt-2"></div>
   </div>
 
   <script>
-    let player;
-    let queue = [];
+    // ======= STATE =======
+    let player = null;
+    let playerReady = false;
+    let queue = []; // { title, videoId, url }
     let currentIndex = -1;
     let isPlaying = false;
     let shuffle = false;
     let repeat = false;
+    let deferredIndex = null; // play after player ready
 
-    // Create YouTube player
-    function onYouTubeIframeAPIReady() {
-      player = new YT.Player('player', {
-        height: '135',
-        width: '240',
-        videoId: '',
-        playerVars: { 'playsinline': 1 },
-        events: {
-          onReady: () => console.log("YouTube Player ready"),
-          onStateChange: onPlayerStateChange
-        }
-      });
-    }
+    // ======= HELPERS =======
+    function $(id){ return document.getElementById(id); }
 
-    function onPlayerStateChange(e) {
-      if (e.data === YT.PlayerState.ENDED && repeat) {
-        player.playVideo();
-      } else if (e.data === YT.PlayerState.ENDED) {
-        playNext();
+    // Robust YouTube ID extractor (watch, youtu.be, embed, shorts, /v/, etc.)
+    function extractVideoID(input) {
+      try {
+        // If user pasted just an ID
+        if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+
+        const url = new URL(input);
+        // Standard watch?v=ID
+        const v = url.searchParams.get('v');
+        if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+
+        // Shorts /shorts/ID
+        const shorts = url.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+        if (shorts) return shorts[1];
+
+        // youtu.be/ID, /embed/ID, /v/ID
+        const pathID = url.pathname.match(/(?:\/embed\/|\/v\/|\/)([a-zA-Z0-9_-]{11})/);
+        if (pathID) return pathID[1];
+
+        return null;
+      } catch {
+        // Not a URL, maybe raw ID
+        return /^[a-zA-Z0-9_-]{11}$/.test(input) ? input : null;
       }
     }
 
-    // Extract video ID from URL
-    function extractVideoID(url) {
-      const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      return match ? match[1] : null;
+    // Safe title fetch with fallback (noembed supports CORS)
+    async function fetchTitle(videoId) {
+      try {
+        const r = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+        const d = await r.json();
+        if (d && d.title) return d.title;
+      } catch (_) {}
+      return `YouTube Video (${videoId})`;
     }
 
-    // Add YouTube URL to queue
-    async function addYouTubeToPlaylist() {
-      const input = document.getElementById('youtubeInput');
-      const url = input.value.trim();
-      if (!url) return alert("Please enter a YouTube URL!");
-      const videoId = extractVideoID(url);
-      if (!videoId) return alert("Invalid YouTube URL!");
-
-      // Fetch title
-      const title = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`)
-        .then(r => r.json())
-        .then(d => d.title || "Unknown Title")
-        .catch(() => "Unknown Title");
-
-      queue.push({ title, videoId });
-      updateQueueUI();
-      input.value = "";
-
-      if (queue.length === 1) playVideoAt(0);
+    function updateNowPlayingUI(song, index) {
+      $('nowTitle').textContent = song ? song.title : '—';
+      $('nowInfo').textContent = song ? `Playing from queue (${index + 1}/${queue.length})` : '—';
+      $('coverArt').src = song ? `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg` : '';
     }
 
-    // Update queue panel
     function updateQueueUI() {
-      const list = document.getElementById('queueList');
+      const list = $('queueList');
+      const empty = $('emptyQueueMsg');
       list.innerHTML = "";
-      queue.forEach((song, index) => {
-        const div = document.createElement('div');
-        div.className = "queue-item";
-        div.textContent = song.title;
-        div.onclick = () => playVideoAt(index);
-        list.appendChild(div);
+
+      if (queue.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      queue.forEach((song, idx) => {
+        const item = document.createElement('div');
+        item.className = 'queue-item';
+        if (idx === currentIndex) item.classList.add('active');
+        item.innerHTML = `
+          <div class="font-semibold truncate">${song.title}</div>
+          <div class="text-xs text-neutral-400 truncate">ID: ${song.videoId}</div>
+        `;
+        item.addEventListener('click', () => playVideoAt(idx));
+        list.appendChild(item);
       });
     }
 
-    // Play a specific song
+    async function addToQueueFromInput() {
+      const input = $('youtubeInput');
+      const raw = input.value.trim();
+      if (!raw) { alert("Please paste a YouTube URL or video ID."); return; }
+
+      const videoId = extractVideoID(raw);
+      if (!videoId) { alert("Couldn't parse that YouTube URL/ID."); return; }
+
+      const title = await fetchTitle(videoId);
+      const song = { title, videoId, url: raw };
+      queue.push(song);
+      updateQueueUI();
+      input.value = "";
+
+      if (currentIndex === -1) playVideoAt(0); // auto-start first add
+    }
+
     function playVideoAt(index) {
       if (!queue[index]) return;
       currentIndex = index;
       const song = queue[index];
-      document.getElementById('nowTitle').textContent = song.title;
-      document.getElementById('nowInfo').textContent = `Playing from queue (${index + 1}/${queue.length})`;
+
+      updateNowPlayingUI(song, index);
+      updateQueueUI(); // highlight active
+
+      // If player isn't ready yet, defer
+      if (!playerReady || !player || typeof player.loadVideoById !== 'function') {
+        deferredIndex = index;
+        return;
+      }
+
       player.loadVideoById(song.videoId);
       isPlaying = true;
-      document.getElementById('btnPlay').textContent = "⏸️";
+      $('btnPlay').textContent = '⏸️';
+      // apply current sliders
+      try { player.setVolume(parseInt($('vol').value, 10)); } catch(_){}
+      try { player.setPlaybackRate(parseFloat($('speed').value)); } catch(_){}
     }
 
-    // Next / Previous
     function playNext() {
+      if (queue.length === 0) return;
       if (shuffle) {
-        playVideoAt(Math.floor(Math.random() * queue.length));
+        const next = Math.floor(Math.random() * queue.length);
+        playVideoAt(next);
       } else if (currentIndex < queue.length - 1) {
         playVideoAt(currentIndex + 1);
       } else if (repeat) {
         playVideoAt(0);
       } else {
-        console.log("End of queue");
+        isPlaying = false;
+        $('btnPlay').textContent = '▶';
       }
     }
 
@@ -245,48 +287,159 @@
       if (currentIndex > 0) playVideoAt(currentIndex - 1);
     }
 
-    /* === Button Logic === */
-    document.getElementById('btnPlay').addEventListener('click', () => {
+    // ======= YOUTUBE PLAYER =======
+    window.onYouTubeIframeAPIReady = function() {
+      player = new YT.Player('player', {
+        height: '135',
+        width: '240',
+        videoId: '',
+        playerVars: { playsinline: 1 },
+        events: {
+          onReady: () => {
+            playerReady = true;
+            // If something was selected before player was ready, play it now
+            if (deferredIndex !== null) {
+              const idx = deferredIndex;
+              deferredIndex = null;
+              playVideoAt(idx);
+            }
+          },
+          onStateChange: (e) => {
+            if (e.data === YT.PlayerState.ENDED) {
+              if (repeat) player.playVideo(); else playNext();
+            }
+          }
+        }
+      });
+    };
+
+    // ======= UI WIRING =======
+    // Panels
+    $('btnQueue').addEventListener('click', () => {
+      $('queuePanel').classList.toggle('open');
+      $('lyricsPanel').classList.remove('open');
+    });
+    $('btnLyrics').addEventListener('click', () => {
+      $('lyricsPanel').classList.toggle('open');
+      $('queuePanel').classList.remove('open');
+    });
+
+    // Add to queue (no inline onclick anymore)
+    $('btnAddToQueue').addEventListener('click', addToQueueFromInput);
+    $('youtubeInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addToQueueFromInput();
+    });
+
+    // Playback
+    $('btnPlay').addEventListener('click', () => {
       if (!player || currentIndex === -1) return;
       if (isPlaying) {
         player.pauseVideo();
-        document.getElementById('btnPlay').textContent = "▶";
+        $('btnPlay').textContent = '▶';
       } else {
         player.playVideo();
-        document.getElementById('btnPlay').textContent = "⏸️";
+        $('btnPlay').textContent = '⏸️';
       }
       isPlaying = !isPlaying;
     });
+    $('btnNext').addEventListener('click', playNext);
+    $('btnPrev').addEventListener('click', playPrev);
 
-    document.getElementById('btnNext').addEventListener('click', playNext);
-    document.getElementById('btnPrev').addEventListener('click', playPrev);
-
-    document.getElementById('btnQueue').addEventListener('click', () => {
-      document.getElementById('queuePanel').classList.toggle('open');
-      document.getElementById('lyricsPanel').classList.remove('open');
-    });
-
-    document.getElementById('btnLyrics').addEventListener('click', () => {
-      document.getElementById('lyricsPanel').classList.toggle('open');
-      document.getElementById('queuePanel').classList.remove('open');
-    });
-
-    document.getElementById('btnShuffle').addEventListener('click', () => {
+    $('btnShuffle').addEventListener('click', () => {
       shuffle = !shuffle;
-      alert(shuffle ? "🔀 Shuffle ON" : "Shuffle OFF");
+      $('btnShuffle').style.opacity = shuffle ? '1' : '0.6';
     });
-
-    document.getElementById('btnRepeat').addEventListener('click', () => {
+    $('btnRepeat').addEventListener('click', () => {
       repeat = !repeat;
-      alert(repeat ? "🔁 Repeat ON" : "Repeat OFF");
+      $('btnRepeat').style.opacity = repeat ? '1' : '0.6';
     });
 
-    document.getElementById('btnToggleVideo').addEventListener('click', () => {
-      const playerDiv = document.getElementById('player');
-      playerDiv.classList.toggle('hidden');
-      document.getElementById('btnToggleVideo').textContent =
-        playerDiv.classList.contains('hidden') ? "🎥 Show Video" : "🎥 Hide Video";
+    // Volume & Speed
+    $('vol').addEventListener('input', () => {
+      try { if (player && playerReady) player.setVolume(parseInt($('vol').value, 10)); } catch(_){}
     });
+    $('speed').addEventListener('input', () => {
+      try { if (player && playerReady) player.setPlaybackRate(parseFloat($('speed').value)); } catch(_){}
+    });
+    $('resetSpeed').addEventListener('click', () => {
+      $('speed').value = 1;
+      try { if (player && playerReady) player.setPlaybackRate(1); } catch(_){}
+    });
+
+    // Faves (simple toggle for current song)
+    const faves = [];
+    $('btnFavToggle').addEventListener('click', () => {
+      if (currentIndex === -1) return;
+      const id = queue[currentIndex].videoId;
+      const i = faves.indexOf(id);
+      if (i === -1) {
+        faves.push(id);
+        $('btnFavToggle').textContent = '⭐ Faved';
+        $('btnFavToggle').classList.add('bg-yellow-500');
+      } else {
+        faves.splice(i, 1);
+        $('btnFavToggle').textContent = '⭐';
+        $('btnFavToggle').classList.remove('bg-yellow-500');
+      }
+    });
+
+    // Import / Export / Share / Stats / Show-Hide video
+    $('btnImport').addEventListener('click', () => $('fileImport').click());
+    $('fileImport').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const data = JSON.parse(text);
+        if (Array.isArray(data.queue)) {
+          queue = data.queue.filter(x => x && x.videoId);
+          currentIndex = -1;
+          updateQueueUI();
+          $('emptyQueueMsg').style.display = queue.length ? 'none' : 'block';
+          alert('Imported queue from JSON.');
+        } else {
+          alert('Invalid JSON format.');
+        }
+      } catch {
+        alert('Not valid JSON.');
+      }
+      e.target.value = '';
+    });
+
+    $('btnExport').addEventListener('click', () => {
+      const data = JSON.stringify({ queue }, null, 2);
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "velkzie_music_data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    $('btnStats').addEventListener('click', () => {
+      alert(`📊 Stats:
+Songs in queue: ${queue.length}
+Current index: ${currentIndex === -1 ? 'none' : currentIndex + 1}
+Shuffle: ${shuffle}
+Repeat: ${repeat}`);
+    });
+
+    $('btnShare').addEventListener('click', async () => {
+      const shareData = { title: "Velkzie Music Player", text: "Check out this player!", url: location.href };
+      try { await navigator.share(shareData); }
+      catch { await navigator.clipboard.writeText(location.href); alert('Link copied to clipboard!'); }
+    });
+
+    $('btnToggleVideo').addEventListener('click', () => {
+      const el = $('player');
+      el.classList.toggle('hidden');
+      $('btnToggleVideo').textContent = el.classList.contains('hidden') ? '🎥 Show Video' : '🎥 Hide Video';
+    });
+
+    // Initial UI paint
+    updateQueueUI();
+    updateNowPlayingUI(null, -1);
   </script>
 </body>
 </html>
