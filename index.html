@@ -20,7 +20,11 @@
       transition: transform 0.2s, box-shadow 0.2s;
     }
     .btn-control:hover { box-shadow: 0 0 15px rgba(168,85,247,.8); transform: scale(1.05); }
-    @keyframes gradientMove { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes gradientMove { 
+      0%{background-position:0% 50%} 
+      50%{background-position:100% 50%} 
+      100%{background-position:0% 50%} 
+    }
 
     /* Panels */
     #lyricsPanel {
@@ -35,6 +39,7 @@
       overflow-y: auto; padding: 1rem; transition: left .4s ease; z-index: 20;
     }
     #queuePanel.open { left: 0; }
+
     .lyric-line { margin-bottom: .35rem; padding: .35rem .5rem; border-radius: .5rem; background: rgba(255,255,255,.05); }
     .lyric-active { background: rgba(168,85,247,.25); box-shadow: 0 0 10px rgba(168,85,247,.6); }
 
@@ -42,14 +47,7 @@
     .pill { padding: .35rem .6rem; border-radius: .75rem; background: #1f1f23; }
     .pill:hover { background:#2a2a30; }
 
-    /* Modal */
-    .modal {
-      position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 50;
-      background: rgba(0,0,0,.6);
-    }
-    .modal.open { display:flex; }
-
-    /* 🔧 Floating YouTube Player */
+    /* Floating YouTube Player */
     #player {
       position: fixed;
       top: 50%;
@@ -133,23 +131,150 @@
   <!-- Floating Video Player -->
   <div id="player"></div>
 
-  <!-- Panels (lyrics, queue, faves, stats, modals) -->
-  <!-- keep your same panels & script code here... -->
+  <!-- Panels (lyrics + queue) -->
+  <div id="lyricsPanel">
+    <h2 class="text-2xl font-bold mb-4">Lyrics</h2>
+    <p class="text-neutral-400">No lyrics loaded yet.</p>
+  </div>
+  <div id="queuePanel">
+    <h2 class="text-2xl font-bold mb-4">Queue</h2>
+    <p class="text-neutral-400">Your queue is empty.</p>
+  </div>
 
   <script>
-    // Existing code is unchanged ...
-    // ADD toggle button for video
+    /* === DOM ELEMENTS === */
+    const btnQueue = document.getElementById('btnQueue');
+    const btnLyrics = document.getElementById('btnLyrics');
+    const btnFaves = document.getElementById('btnFaves');
+    const btnStats = document.getElementById('btnStats');
+    const btnImport = document.getElementById('btnImport');
+    const btnExport = document.getElementById('btnExport');
+    const btnShare = document.getElementById('btnShare');
     const btnToggleVideo = document.getElementById('btnToggleVideo');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnNext = document.getElementById('btnNext');
+    const btnShuffle = document.getElementById('btnShuffle');
+    const btnRepeat = document.getElementById('btnRepeat');
+    const vol = document.getElementById('vol');
+    const speed = document.getElementById('speed');
+    const resetSpeed = document.getElementById('resetSpeed');
     const playerDiv = document.getElementById('player');
+    const fileImport = document.getElementById('fileImport');
+    const btnFavToggle = document.getElementById('btnFavToggle');
+    const lyricsPanel = document.getElementById('lyricsPanel');
+    const queuePanel = document.getElementById('queuePanel');
 
-    btnToggleVideo.addEventListener('click', () => {
-      playerDiv.classList.toggle('hidden');
-      if (playerDiv.classList.contains('hidden')) {
-        btnToggleVideo.textContent = "🎥 Show Video";
-      } else {
-        btnToggleVideo.textContent = "🎥 Hide Video";
+    /* === STATE === */
+    let isPlaying = false;
+    let queue = [];
+    let faves = [];
+    let repeat = false;
+    let shuffle = false;
+
+    /* === PANEL TOGGLES === */
+    btnQueue.addEventListener('click', () => {
+      queuePanel.classList.toggle('open');
+      lyricsPanel.classList.remove('open');
+    });
+    btnLyrics.addEventListener('click', () => {
+      lyricsPanel.classList.toggle('open');
+      queuePanel.classList.remove('open');
+    });
+
+    /* === FAVES === */
+    btnFavToggle.addEventListener('click', () => {
+      btnFavToggle.classList.toggle('bg-yellow-500');
+      btnFavToggle.textContent = btnFavToggle.classList.contains('bg-yellow-500') ? '⭐ Faved' : '⭐';
+    });
+
+    /* === IMPORT / EXPORT === */
+    btnImport.addEventListener('click', () => fileImport.click());
+    fileImport.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => alert(`✅ Imported file: ${file.name}\n\n${reader.result.slice(0,200)}...`);
+      reader.readAsText(file);
+    });
+
+    btnExport.addEventListener('click', () => {
+      const data = JSON.stringify({ queue, faves, repeat, shuffle }, null, 2);
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "velkzie_music_data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    /* === STATS === */
+    btnStats.addEventListener('click', () => {
+      alert(`📊 Stats:\nSongs in queue: ${queue.length}\nFavorites: ${faves.length}\nRepeat: ${repeat}\nShuffle: ${shuffle}`);
+    });
+
+    /* === SHARE === */
+    btnShare.addEventListener('click', async () => {
+      const shareData = {
+        title: "Velkzie Music Player",
+        text: "Check out this cool music player!",
+        url: window.location.href
+      };
+      try {
+        await navigator.share(shareData);
+      } catch {
+        navigator.clipboard.writeText(window.location.href);
+        alert("🔗 Link copied to clipboard!");
       }
     });
+
+    /* === VIDEO TOGGLE === */
+    btnToggleVideo.addEventListener('click', () => {
+      playerDiv.classList.toggle('hidden');
+      btnToggleVideo.textContent = playerDiv.classList.contains('hidden')
+        ? "🎥 Show Video"
+        : "🎥 Hide Video";
+    });
+
+    /* === PLAYBACK BUTTONS === */
+    btnPlay.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      btnPlay.textContent = isPlaying ? "⏸️" : "▶";
+      console.log(isPlaying ? "▶ Playing..." : "⏸️ Paused");
+    });
+    btnPrev.addEventListener('click', () => alert("⏮️ Previous track"));
+    btnNext.addEventListener('click', () => alert("⏭️ Next track"));
+
+    btnShuffle.addEventListener('click', () => {
+      shuffle = !shuffle;
+      btnShuffle.style.opacity = shuffle ? "1" : "0.6";
+      alert(shuffle ? "🔀 Shuffle ON" : "Shuffle OFF");
+    });
+    btnRepeat.addEventListener('click', () => {
+      repeat = !repeat;
+      btnRepeat.style.opacity = repeat ? "1" : "0.6";
+      alert(repeat ? "🔁 Repeat ON" : "Repeat OFF");
+    });
+
+    /* === VOLUME & SPEED === */
+    vol.addEventListener('input', () => console.log("🔊 Volume:", vol.value));
+    speed.addEventListener('input', () => console.log("⚡ Speed:", speed.value));
+    resetSpeed.addEventListener('click', () => {
+      speed.value = 1;
+      console.log("⚡ Speed reset to 1x");
+    });
+
+    /* === ADD YOUTUBE TO PLAYLIST === */
+    function addYouTubeToPlaylist() {
+      const input = document.getElementById('youtubeInput');
+      const url = input.value.trim();
+      if (!url) return alert("Please enter a YouTube URL!");
+      queue.push(url);
+      alert(`🎵 Added to queue: ${url}`);
+      input.value = "";
+    }
+    window.addYouTubeToPlaylist = addYouTubeToPlaylist;
   </script>
 </body>
 </html>
